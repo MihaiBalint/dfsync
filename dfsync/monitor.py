@@ -65,6 +65,7 @@ if __name__ == "__main__":
         print("Usage: {} [source_dir] <destination_path>\n".format(sys.argv[0]))
         sys.exit(1)
 
+    print("Destination dir: '{}'".format(destination_dir))
     print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
     event_handler = FileChangedEventHandler("rsync", destination_dir=destination_dir)
     observer = Observer()
