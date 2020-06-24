@@ -1,0 +1,20 @@
+# ignore all hiden files
+.*
+
+# ignore python bytecode files
+*.pyc
+__pycache__
+
+# preserve .gitignore and .gitkeep files
+!.gitignore
+!.gitkeep
+
+# preserve .gitlab-ci.yml
+!.gitlab-ci.yml
+!.pylintrc
+
+# ignore database files
+*.db
+
+# artefacts
+pytest-results.xml
