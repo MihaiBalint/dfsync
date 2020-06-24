@@ -4,22 +4,23 @@ import logging
 from watchdog.observers import Observer
 from watchdog.events import FileModifiedEvent, FileSystemEventHandler
 
+from dfsync.backends import rsync_backend
+
 logging.basicConfig(level=logging.DEBUG)
 
 
 class FileChangedEventHandler(FileSystemEventHandler):
-    def __init__(self, backend: str = "log"):
+    def __init__(self, backend: str = "log", **kwargs):
         self.backend = getattr(self, "_{}_backend".format(backend), None)
         if self.backend is None:
             raise ValueError("Backend not found: {}".format(backend))
+        self.backend_args = kwargs
 
     def _log_backend(self, event):
         logging.info(event)
 
     def _rsync_backend(self, event):
-        logging.error(
-            "Rsync backend not implemented (changed: {})".format(event.src_path)
-        )
+        rsync_backend(src_file_path=event.src_path, event=event, **self.backend_args)
 
     def on_file_modified(self, event):
         self.backend(event)
@@ -48,6 +49,8 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     path = sys.argv[1] if len(sys.argv) > 1 else "."
+
+    print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
     event_handler = FileChangedEventHandler("rsync")
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
