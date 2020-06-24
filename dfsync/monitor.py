@@ -2,11 +2,16 @@ import sys
 import time
 import logging
 from watchdog.observers import Observer
-from watchdog.events import FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import (
+    FileCreatedEvent,
+    FileModifiedEvent,
+    FileDeletedEvent,
+    FileSystemEventHandler,
+)
 
 from dfsync.backends import rsync_backend
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 class FileChangedEventHandler(FileSystemEventHandler):
@@ -22,12 +27,12 @@ class FileChangedEventHandler(FileSystemEventHandler):
     def _rsync_backend(self, event):
         rsync_backend(src_file_path=event.src_path, event=event, **self.backend_args)
 
-    def on_file_modified(self, event):
-        self.backend(event)
-
     def catch_all_handler(self, event):
-        if isinstance(event, FileModifiedEvent):
-            self.on_file_modified(event)
+        event_classes = [FileCreatedEvent, FileDeletedEvent, FileModifiedEvent]
+        for event_class in event_classes:
+            if isinstance(event, event_class):
+                self.backend(event)
+                return
 
     def on_moved(self, event):
         self.catch_all_handler(event)
@@ -48,10 +53,20 @@ if __name__ == "__main__":
         format="%(asctime)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    path = sys.argv[1] if len(sys.argv) > 1 else "."
+    path = "."
+    destination_dir = None
+
+    if len(sys.argv) > 2:
+        path = sys.argv[1]
+        destination_dir = sys.argv[2]
+    elif len(sys.argv) > 1:
+        destination_dir = sys.argv[1]
+    else:
+        print("Usage: {} [source_dir] <destination_path>\n".format(sys.argv[0]))
+        sys.exit(1)
 
     print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
-    event_handler = FileChangedEventHandler("rsync")
+    event_handler = FileChangedEventHandler("rsync", destination_dir=destination_dir)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
