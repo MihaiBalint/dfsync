@@ -8,8 +8,21 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class FileChangedEventHandler(FileSystemEventHandler):
+    def __init__(self, backend: str = "log"):
+        self.backend = getattr(self, "_{}_backend".format(backend), None)
+        if self.backend is None:
+            raise ValueError("Backend not found: {}".format(backend))
+
+    def _log_backend(self, event):
+        logging.info(event)
+
+    def _rsync_backend(self, event):
+        logging.error(
+            "Rsync backend not implemented (changed: {})".format(event.src_path)
+        )
+
     def on_file_modified(self, event):
-        logging.debug(event)
+        self.backend(event)
 
     def catch_all_handler(self, event):
         if isinstance(event, FileModifiedEvent):
@@ -35,7 +48,7 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     path = sys.argv[1] if len(sys.argv) > 1 else "."
-    event_handler = FileChangedEventHandler()
+    event_handler = FileChangedEventHandler("rsync")
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
