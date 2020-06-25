@@ -16,4 +16,4 @@ def rsync_backend(src_file_path, destination_dir: str = None, **kwargs):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print(src_file_path)
+    print("Synced {}".format(src_file_path))
