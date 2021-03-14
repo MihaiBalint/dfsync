@@ -5,6 +5,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from dfsync.backends import rsync_backend
+from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
 
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +26,9 @@ class FileChangedEventHandler(FileSystemEventHandler):
 
     def _rsync_backend(self, event):
         rsync_backend(src_file_path=event.src_path, event=event, **self.backend_args)
+
+    def _kube_backend(self, event):
+        kube_backend(src_file_path=event.src_path, event=event, **self.backend_args)
 
     def _propagate_event(self, event):
         for file_filter in self.filters:
@@ -52,6 +56,14 @@ class FileChangedEventHandler(FileSystemEventHandler):
         self.catch_all_handler(event)
 
 
+def split_destination(destination):
+    kube = "kube://"
+    if destination.lower().startswith(kube):
+        return "kube", destination[len(kube) :]
+    else:
+        return "rsync", destination
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -70,9 +82,10 @@ if __name__ == "__main__":
         print("Usage: {} [source_dir] <destination_path>\n".format(sys.argv[0]))
         sys.exit(1)
 
-    print("Destination: '{}'".format(destination_dir))
+    backend, destination_dir = split_destination(destination_dir)
+    print("Destination, {}: '{}'".format(backend, destination_dir))
     print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
-    event_handler = FileChangedEventHandler("rsync", destination_dir=destination_dir)
+    event_handler = FileChangedEventHandler(backend, destination_dir=destination_dir)
     observer = Observer()
     observer.schedule(event_handler, path, recursive=True)
     observer.start()
