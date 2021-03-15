@@ -4,6 +4,8 @@
 # ignore python bytecode files
 *.pyc
 __pycache__
+*.egg-info
+dist/
 
 # preserve .gitignore and .gitkeep files
 !.gitignore
