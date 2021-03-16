@@ -3,9 +3,11 @@ import os
 import os.path
 import dfsync.backends.kube_exec as kube_exec
 
-from kubernetes import client, config
+from kubernetes import client, config, watch
 from kubernetes.stream import stream
 from .rsync import rsync_backend
+
+SUPERVISOR_INSTALL = "always"
 
 
 class Alpine:
@@ -28,37 +30,36 @@ class Alpine:
         return ["rsync", "--version"]
 
 
+def please_wait(msg="Please wait"):
+    print("⌛  {}...".format(msg))
+
+
 class KubeReDeployer:
     def __init__(self):
         # Configs can be set in Configuration class directly or using helper utility
         config.load_kube_config()
         self.api = client.CoreV1Api()
         self.apps_api = client.AppsV1Api()
-        self._was_status_printed = {}
 
     def supervisor_install(self, pod, spec, status):
-        if status.ready:
+        if status.ready and SUPERVISOR_INSTALL != "always":
             return
         if self._is_supervised(pod, spec, status):
             return
 
         command = Alpine.get_supervise_command()
         deployments = self._set_deployment_command(pod, spec, status, command)
-        print("Supervisor installed on {}".format(" ".join(deployments)))
+        print("Supervisor installing on {}".format(" ".join(deployments)))
 
     def supervisor_uninstall(self, pod, spec, status):
-        import ipdb
-
-        ipdb.set_trace()
         if not self._is_supervised(pod, spec, status):
             return
 
         deployments = self._set_deployment_command(pod, spec, status, command=[])
-        print("Supervisor uninstalled from {}".format(" ".join(deployments)))
+        print("Supervisor uninstalling from {}".format(" ".join(deployments)))
 
     def _set_deployment_command(self, pod, spec, status, command):
         namespace = pod.metadata.namespace
-
         deployments = {}
         for deployment, container_spec in self.list_deployments(namespace, spec.image):
             if spec.name != container_spec.name:
@@ -74,7 +75,11 @@ class KubeReDeployer:
                 spec=deployment.spec,
             )
             self.apps_api.patch_namespaced_deployment(
-                name=deployment.metadata.name, namespace=namespace, body=patch
+                name=deployment.metadata.name,
+                namespace=namespace,
+                body=patch,
+                async_req=False,
+                _request_timeout=30,
             )
         return [d.metadata.name for _, d in deployments.items()]
 
@@ -89,11 +94,7 @@ class KubeReDeployer:
 
     def status(self, image_base):
         ready_map = {False: "🔴  ", True: "🟢  ", "dev": "🟠  "}
-        if self._was_status_printed.get(image_base):
-            return
-
-        self._was_status_printed[image_base] = True
-        print("Targeting pods using image: {}".format(image_base))
+        # print("Pods using image: {}".format(image_base))
         for pod, spec, status in self.generate_matching_containers(image_base):
             icon = ready_map[status.ready]
             status_msg = status.ready
@@ -107,7 +108,6 @@ class KubeReDeployer:
                 icon = ready_map["dev"]
                 status_msg = "supervisor is running"
 
-            self.supervisor_install(pod, spec, status)
             print("{}{} - ready: {}".format(icon, pod.metadata.name, status_msg))
         print("")
 
@@ -154,17 +154,26 @@ class KubeReDeployer:
     def generate_matching_containers(self, image_base):
         result = self.api.list_pod_for_all_namespaces(watch=False)
         for pod in result.items:
-            specs = pod.spec.containers
-            statuses = pod.status.container_statuses
-
-            for spec, status in zip(specs, statuses):
+            for spec, status in self.list_containers(pod):
                 if not status.image.startswith(image_base):
                     continue
                 yield pod, spec, status
 
-    def redeploy(self, src_file_path, destination_dir: str = None, **kwargs):
+    def list_containers(self, pod):
+        containers = {}
+        for spec in pod.spec.containers:
+            record = containers.get(spec.name) or [None, None]
+            record[0] = spec
+            containers[spec.name] = record
+
+        for status in pod.status.container_statuses:
+            record = containers.get(status.name) or [None, None]
+            record[1] = status
+            containers[status.name] = record
+        return containers.values()
+
+    def sync(self, src_file_path, destination_dir: str = None, **kwargs):
         image_base, destination_dir = self.split_destination(destination_dir)
-        self.status(image_base)
 
         for pod, spec, status in self.generate_matching_containers(image_base):
             if not status.ready:
@@ -231,6 +240,42 @@ class KubeReDeployer:
         except:
             return False
 
+    def toggle_supervisor(self, image_base, action="install"):
+        pods = {}
+        for pod, spec, status in self.generate_matching_containers(image_base):
+            if action == "install":
+                self.supervisor_install(pod, spec, status)
+            else:
+                self.supervisor_uninstall(pod, spec, status)
 
-_instance = KubeReDeployer()
-kube_backend = _instance.redeploy
+            pods[pod.metadata.name] = pod
+
+        please_wait()
+        w = watch.Watch()
+        cleanup_started = False
+        for event in w.stream(self.api.list_pod_for_all_namespaces, timeout_seconds=30):
+            pod = event["object"]
+            if pod.metadata.name not in pods:
+                continue
+
+            if event["type"] == "DELETED":
+                del pods[pod.metadata.name]
+            elif event["type"] != "ADDED" and not cleanup_started:
+                please_wait("Cleaning up")
+                cleanup_started = True
+
+            if len(pods) == 0:
+                w.stop()
+
+    def on_monitor_start(self, destination_dir: str = None, **kwargs):
+        image_base, destination_dir = self.split_destination(destination_dir)
+        self.toggle_supervisor(image_base, "install")
+        self.status(image_base)
+
+    def on_monitor_exit(self, destination_dir: str = None, **kwargs):
+        image_base, destination_dir = self.split_destination(destination_dir)
+        self.toggle_supervisor(image_base, "uninstall")
+        self.status(image_base)
+
+
+kube_backend = KubeReDeployer()

@@ -4,6 +4,8 @@ import os.path
 import subprocess
 import sys
 
+from kubernetes import client, config
+
 
 def get_kubectl_exec_command(namespace, pod_name, container_name):
     ns = ["-n", "{}".format(namespace)] if namespace else []
@@ -36,6 +38,8 @@ def main():
     container_cmd = get_container_command()
     cmd = [*kubectl_cmd, *container_cmd]
     subprocess.check_call(cmd)
+    # print("MIHAI\n\n", file=sys.stderr)
+    # print(subprocess.check_output(cmd), file=sys.stderr)
 
 
 if __name__ == "__main__":

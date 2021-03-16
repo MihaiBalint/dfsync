@@ -10,12 +10,18 @@ from dfsync.filters import ALL_FILTERS
 
 logging.basicConfig(level=logging.INFO)
 
+BACKENDS = {
+    # File sync backends
+    "rsync": rsync_backend,
+    "kube": kube_backend,
+}
+
 
 class FileChangedEventHandler(FileSystemEventHandler):
     def __init__(self, backend: str = "log", **kwargs):
         self.filters = [*ALL_FILTERS]
 
-        self.backend = getattr(self, "_{}_backend".format(backend), None)
+        self.backend = BACKENDS.get(backend)
         if self.backend is None:
             raise ValueError("Backend not found: {}".format(backend))
         self.backend_args = kwargs
@@ -24,17 +30,16 @@ class FileChangedEventHandler(FileSystemEventHandler):
     def _log_backend(self, event):
         logging.info(event)
 
-    def _rsync_backend(self, event):
-        rsync_backend(src_file_path=event.src_path, event=event, **self.backend_args)
-
-    def _kube_backend(self, event):
-        kube_backend(src_file_path=event.src_path, event=event, **self.backend_args)
+    def _sync(self, event):
+        self.backend.sync(
+            src_file_path=event.src_path, event=event, **self.backend_args
+        )
 
     def _propagate_event(self, event):
         for file_filter in self.filters:
             if file_filter(event=event) is False:
                 return
-        self.backend(event)
+        self._sync(event)
 
     def catch_all_handler(self, event):
         try:
@@ -54,6 +59,12 @@ class FileChangedEventHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         self.catch_all_handler(event)
+
+    def on_monitor_start(self):
+        self.backend.on_monitor_start(**self.backend_args)
+
+    def on_monitor_exit(self):
+        self.backend.on_monitor_exit(**self.backend_args)
 
 
 def split_destination(destination):
@@ -91,10 +102,12 @@ if __name__ == "__main__":
     observer.start()
 
     try:
+        event_handler.on_monitor_start()
         while event_handler.raised_exception is False:
             time.sleep(0.2)
     except KeyboardInterrupt:
         print("Received [Ctrl-C], exiting.")
     finally:
         observer.stop()
+        event_handler.on_monitor_exit()
         observer.join()
