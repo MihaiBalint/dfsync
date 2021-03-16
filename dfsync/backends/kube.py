@@ -205,13 +205,13 @@ class KubeReDeployer:
 
     def sync_files(self, rsh_command, src_file, destination_dir: str = None, **kwargs):
         rsh_destination = ":{}".format(destination_dir)
-        rsync_backend(
-            src_file,
-            destination_dir=rsh_destination,
-            rsh=rsh_command,
-            blocking_io=True,
-            **kwargs
-        )
+        rsync_args = {
+            **kwargs,
+            "destination_dir": rsh_destination,
+            "rsh": rsh_command,
+            "blocking_io": True,
+        }
+        rsync_backend.sync(src_file, **rsync_args)
 
     def _exec(self, pod, spec, status, command: list):
         return stream(

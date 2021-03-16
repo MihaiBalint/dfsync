@@ -10,6 +10,7 @@ class FileRsync:
         pass
 
     def sync(
+        self,
         src_file_path,
         destination_dir: str = None,
         event=None,
