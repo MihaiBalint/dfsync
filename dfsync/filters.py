@@ -87,6 +87,10 @@ class UntrackedGitFilesFilter(LoggingFilter):
         if repo is None:
             return False
 
+        if repo.ignored(src_abs_path):
+            self._ignore(src_file_path, "file is in .gitignore")
+            return True
+
         if "/.git/" in src_file_path:
             self._ignore(src_file_path, "GIT repo internals")
             return True
