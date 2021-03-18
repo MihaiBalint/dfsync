@@ -7,8 +7,6 @@ from kubernetes import client, config, watch
 from kubernetes.stream import stream
 from .rsync import rsync_backend
 
-SUPERVISOR_INSTALL = "always"
-
 
 class Alpine:
     @classmethod
@@ -42,8 +40,6 @@ class KubeReDeployer:
         self.apps_api = client.AppsV1Api()
 
     def supervisor_install(self, pod, spec, status):
-        if status.ready and SUPERVISOR_INSTALL != "always":
-            return
         if self._is_supervised(pod, spec, status):
             return
 
@@ -247,8 +243,11 @@ class KubeReDeployer:
                 self.supervisor_install(pod, spec, status)
             else:
                 self.supervisor_uninstall(pod, spec, status)
-
             pods[pod.metadata.name] = pod
+
+        if not len(pods):
+            print("None of the deployment containers match the given image")
+            return
 
         please_wait()
         w = watch.Watch()
@@ -266,6 +265,8 @@ class KubeReDeployer:
 
             if len(pods) == 0:
                 w.stop()
+        if len(pods) > 0:
+            print("Time-out waiting for pods: {}".format(", ".join(pods.keys())))
 
     def on_monitor_start(self, destination_dir: str = None, **kwargs):
         image_base, destination_dir = self.split_destination(destination_dir)
