@@ -26,19 +26,9 @@ class FileRsync:
         destination_dir = destination_dir.rstrip("/")
         destination_dir = "{}/".format(destination_dir)
         if event.event_type == "deleted":
-            rsync_cmd = [
-                "rsync",
-                "-rRvx",
-                "--delete",
-                "--delete-excluded",
-                # Guaranteed to not exist :)
-                "--include=/f218a6b8a0607473ba376b07eff77eb9d4a7ee80/",
-                "--exclude=/{}".format(src_file_path),
-                *blocking_io,
-                *rsh,
-                "./",
-                destination_dir,
-            ]
+            rsync_cmd = self._get_rsync_cmd_on_file_delete(
+                src_file_path, destination_dir, blocking_io, rsh
+            )
         else:
             rsync_cmd = [
                 "rsync",
@@ -64,40 +54,40 @@ class FileRsync:
         )
         print("{} {}".format(event_type, src_file_path))
 
-    def _get_rsync_cmd_on_file_delete():
-        """
-rsync --dry-run -rRvx --delete --filter='-,s *' --filter='+r jack/'  --filter='+r jack/daniels' --filter='+,r jack/daniels/mihai' --filter='-,r *' ./ /Users/mihai/04-syneto/syneto-minerva-x/
-        """
-
-        pass
-
     def _get_rsync_cmd_on_file_delete(
-        self, src_file_path, destination_dir: str, blocking_io: list, rsh: list,
+        self, src_file_path, destination_dir: str, blocking_io: list, rsh: list
     ):
         src_dir, file_name = os.path.split(src_file_path)
-        src_dir = src_dir.lstrip("./").rstrip("/")
+        intermediate_paths = [file_name]
+        while len(src_dir) > 0 and src_dir.strip() != ".":
+            if os.path.isdir(src_dir):
+                break
+            src_dir, deleted_dir = os.path.split(src_dir)
+            intermediate_paths = [
+                os.path.join(deleted_dir, p) for p in ["", *intermediate_paths]
+            ]
 
-        if len(src_dir.strip()) == 0:
-            src_dir = "."
-            destination_dir = destination_dir.rstrip("/")
+        filters = ["--filter=+,r {}".format(p) for p in intermediate_paths]
+
+        if not src_dir:
+            src_dir = src_dir or "./"
         else:
-            destination_dir = os.path.join(destination_dir.rstrip("/"), src_dir)
+            destination_dir = "{}{}/".format(destination_dir, src_dir)
+            src_dir = "{}/".format(src_dir)
 
-        src_dir = "{}/".format(src_dir)
-        destination_dir = "{}/".format(destination_dir)
-        return [
+        cmd = [
             "rsync",
-            "-rRvx",
+            "-rvx",
             "--delete",
-            "--delete-excluded",
-            # Guaranteed to not exist :)
-            "--include=/f218a6b8a0607473ba376b07eff77eb9d4a7ee80",
-            "--exclude=/{}",
+            "--filter=-,s *",
+            *filters,
+            "--filter=-,r *",
             *blocking_io,
             *rsh,
             src_dir,
             destination_dir,
         ]
+        return cmd
 
     def on_monitor_start(self, destination_dir: str = None, **kwargs):
         pass
