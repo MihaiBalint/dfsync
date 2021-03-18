@@ -10,7 +10,7 @@ from dfsync.backends import rsync_backend
 from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARN)
 
 BACKENDS = {
     # File sync backends
@@ -115,7 +115,7 @@ def split_destination(destination):
 
 def main():
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARN,
         format="%(asctime)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
