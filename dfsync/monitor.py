@@ -137,7 +137,7 @@ def main():
         backend, destination_dir=destination_dir, watched_dir=path
     )
     observer = Observer()
-    observer.schedule(event_handler, path, recursive=True)
+    observer.schedule(event_handler, os.path.abspath(path), recursive=True)
     try:
         event_handler.on_monitor_start()
         print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
