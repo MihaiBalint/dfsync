@@ -1,6 +1,7 @@
 import fnmatch
 import os.path
 import git.exc
+import subprocess
 from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileDeletedEvent
 
 
@@ -12,7 +13,7 @@ def exclude_watchdog_directory_events(event=None, **kwargs):
     return False
 
 
-EMACS_PATTERNS = ["*~", "#*#", ".#*", ".goutputstream-*"]
+EMACS_PATTERNS = ["*~", "#*#", ".#*", ".goutputstream-*", "*_flymake.py"]
 
 
 class LoggingFilter:
@@ -60,6 +61,17 @@ class UntrackedGitFilesFilter(LoggingFilter):
         self._repo = None
         self._is_repo_initialized = False
         self._modified_untracked_files = set()
+        self._untracked_and_ignored_files = []
+
+    def _get_existing_parent(self, path):
+        exists = False
+        parent_path = None
+        while not exists:
+            parent_path, _ = os.path.split(os.path.expanduser(path))
+            exists = os.path.isdir(parent_path) and os.path.exists(parent_path)
+            if len(parent_path) == 0:
+                return None
+        return parent_path
 
     def get_git_repo(self, path: str):
         if self._is_repo_initialized:
@@ -69,15 +81,25 @@ class UntrackedGitFilesFilter(LoggingFilter):
         try:
             from git import Repo
 
-            parent_path, _ = os.path.split(os.path.expanduser(path))
-            self._repo = Repo(parent_path, search_parent_directories=True)
-            print("Using git repo: {}".format(self._repo.working_tree_dir))
+            parent_path = self._get_existing_parent(path)
+            if parent_path is not None:
+                self._repo = Repo(parent_path, search_parent_directories=True)
+                print("Using git repo: {}".format(self._repo.working_tree_dir))
         except git.exc.InvalidGitRepositoryError:
             pass
         except ImportError:
             pass
 
         return self._repo
+
+    def load_ignored_files(self, cwd):
+        files = subprocess.check_output(
+            "git ls-files --exclude-standard -oi --directory".split(" "), cwd=cwd
+        )
+        files = files.decode("utf8")
+        self._untracked_and_ignored_files = [
+            f.strip() for f in files.split("\n") if len(f.strip()) > 0
+        ]
 
     def is_filtered(self, src_file_path: str = None, event=None, **kwargs):
         src_file_path = src_file_path or event.src_path
@@ -86,6 +108,7 @@ class UntrackedGitFilesFilter(LoggingFilter):
         repo = self.get_git_repo(src_file_path)
         if repo is None:
             return False
+        self.load_ignored_files(self._repo.working_tree_dir)
 
         if repo.ignored(src_abs_path):
             self._ignore(src_file_path, "file is in .gitignore")
@@ -103,8 +126,19 @@ class UntrackedGitFilesFilter(LoggingFilter):
         return False
 
 
+EDITOR_FILTERS = [EmacsBufferFilter()]
+GIT_FILTER = UntrackedGitFilesFilter()
+
+
+def list_files_to_ignore():
+    result = set(GIT_FILTER._untracked_and_ignored_files)
+    for editor_filter in EDITOR_FILTERS:
+        result = {*result, *editor_filter.ignored_files}
+    return result
+
+
 ALL_FILTERS = [
     exclude_watchdog_directory_events,
-    EmacsBufferFilter().is_not_filtered,
-    UntrackedGitFilesFilter().is_not_filtered,
+    *[f.is_not_filtered for f in EDITOR_FILTERS],
+    GIT_FILTER.is_not_filtered,
 ]
