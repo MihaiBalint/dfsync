@@ -5,6 +5,8 @@ import dfsync.backends.kube_exec as kube_exec
 
 from kubernetes import client, config, watch
 from kubernetes.stream import stream
+
+from dfsync.filters import GIT_FILTER
 from .rsync import rsync_backend
 
 
@@ -16,7 +18,7 @@ class Alpine:
             # TODO: detect operating system and run matching supervisor command
             "/bin/sh",
             "-c",
-            "echo dfsync && apk --no-cache add supervisor && supervisord -n",
+            "echo dfsync && apk --no-cache add supervisor rsync && supervisord -n",
         ]
 
     @classmethod
@@ -151,6 +153,8 @@ class KubeReDeployer:
         result = self.api.list_pod_for_all_namespaces(watch=False)
         for pod in result.items:
             for spec, status in self.list_containers(pod):
+                if not status:
+                    continue
                 if not status.image.startswith(image_base):
                     continue
                 yield pod, spec, status
@@ -162,7 +166,7 @@ class KubeReDeployer:
             record[0] = spec
             containers[spec.name] = record
 
-        for status in pod.status.container_statuses:
+        for status in pod.status.container_statuses or []:
             record = containers.get(status.name) or [None, None]
             record[1] = status
             containers[status.name] = record
@@ -207,7 +211,10 @@ class KubeReDeployer:
             "rsh": rsh_command,
             "blocking_io": True,
         }
-        rsync_backend.sync(src_file, **rsync_args)
+        if src_file == "./":
+            rsync_backend.sync_project(src_file, **rsync_args)
+        else:
+            rsync_backend.sync(src_file, **rsync_args)
 
     def _exec(self, pod, spec, status, command: list):
         return stream(
@@ -269,12 +276,14 @@ class KubeReDeployer:
             print("Time-out waiting for pods: {}".format(", ".join(pods.keys())))
 
     def on_monitor_start(self, destination_dir: str = None, **kwargs):
-        image_base, destination_dir = self.split_destination(destination_dir)
+        image_base, _ = self.split_destination(destination_dir)
         self.toggle_supervisor(image_base, "install")
         self.status(image_base)
+        GIT_FILTER.load_ignored_files("./")
+        self.sync("./", destination_dir, **kwargs)
 
     def on_monitor_exit(self, destination_dir: str = None, **kwargs):
-        image_base, destination_dir = self.split_destination(destination_dir)
+        image_base, _ = self.split_destination(destination_dir)
         self.toggle_supervisor(image_base, "uninstall")
         self.status(image_base)
 
