@@ -2,22 +2,37 @@ import logging
 import os.path
 import subprocess
 
-EVENT_TYPE_MAP = {"created": "Created", "deleted": "Deleted", "default": "Synced"}
+from dfsync.filters import list_files_to_ignore
+
+EVENT_TYPE_MAP = {
+    "created": "Created",
+    "deleted": "Deleted",
+    "default": "Synced",
+    "full-sync": "Full Sync",
+}
 
 
 class FileRsync:
     def __init__(self):
         pass
 
-    def sync(
+    def sync(self, src_file_path, event=None, **kwargs):
+        event_type = "default"
+        if not os.path.exists(src_file_path):
+            event_type = "deleted"
+        elif event is not None:
+            event_type = event.event_type
+        return self._sync(src_file_path, event_type=event_type, **kwargs)
+
+    def _sync(
         self,
         src_file_path,
         destination_dir: str = None,
-        event=None,
+        event_type="default",
         rsh=None,
         rsh_env=None,
         blocking_io=False,
-        **kwargs
+        **kwargs,
     ):
         rsh = ["--rsh={}".format(rsh)] if rsh is not None else []
         blocking_io = ["--blocking-io"] if blocking_io else []
@@ -25,9 +40,14 @@ class FileRsync:
         src_file_path = src_file_path.lstrip("./")
         destination_dir = destination_dir.rstrip("/")
         destination_dir = "{}/".format(destination_dir)
-        if event.event_type == "deleted":
+
+        if event_type == "deleted":
             rsync_cmd = self._get_rsync_cmd_on_file_delete(
                 src_file_path, destination_dir, blocking_io, rsh
+            )
+        elif event_type == "full-sync":
+            rsync_cmd = self._get_rsync_cmd_on_full_sync(
+                src_file_path or "./", destination_dir, blocking_io, rsh
             )
         else:
             rsync_cmd = [
@@ -49,9 +69,7 @@ class FileRsync:
             env=rsh_env,
         )
 
-        event_type = EVENT_TYPE_MAP.get(event.event_type) or EVENT_TYPE_MAP.get(
-            "default"
-        )
+        event_type = EVENT_TYPE_MAP.get(event_type) or EVENT_TYPE_MAP.get("default")
         print("{} {}".format(event_type, src_file_path))
 
     def _get_rsync_cmd_on_file_delete(
@@ -88,6 +106,25 @@ class FileRsync:
             destination_dir,
         ]
         return cmd
+
+    def _get_rsync_cmd_on_full_sync(
+        self, src_file_path, destination_dir: str, blocking_io: list, rsh: list
+    ):
+        filters = ["--filter=- {}".format(f) for f in list_files_to_ignore()]
+        return [
+            "rsync",
+            "-rvx",
+            "--delete",
+            "--filter=- .git/",
+            *filters,
+            *blocking_io,
+            *rsh,
+            src_file_path,
+            destination_dir,
+        ]
+
+    def sync_project(self, src_file_path, **kwargs):
+        return self._sync(src_file_path, event_type="full-sync", **kwargs)
 
     def on_monitor_start(self, destination_dir: str = None, **kwargs):
         pass
