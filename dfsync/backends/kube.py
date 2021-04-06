@@ -211,7 +211,8 @@ class KubeReDeployer:
 
     def get_exec_command(self, namespace, pod_name, container_name):
         py_path = os.path.abspath(sys.executable)
-        cmd = [py_path, os.path.abspath(__file__)]
+        backends_dir, _ = os.path.split(os.path.abspath(__file__))
+        cmd = [py_path, os.path.join(backends_dir, "kube_exec.py")]
         env = {
             **os.environ,
             "KUBEEXEC_POD": pod_name,
