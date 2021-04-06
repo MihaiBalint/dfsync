@@ -1,7 +1,6 @@
 import sys
 import os
 import os.path
-import dfsync.backends.kube_exec as kube_exec
 
 from kubernetes import client, config, watch
 from kubernetes.stream import stream
@@ -12,10 +11,12 @@ from .rsync import rsync_backend
 
 class Alpine:
     @classmethod
+    def name(cls):
+        return "Alpine linux (or apk-based Alpine clone)"
+
+    @classmethod
     def get_supervise_command(cls):
         return [
-            # This command only works in containers based on Alpine linux
-            # TODO: detect operating system and run matching supervisor command
             "/bin/sh",
             "-c",
             "echo dfsync && apk --no-cache add supervisor rsync && supervisord -n",
@@ -29,6 +30,78 @@ class Alpine:
     def check_rsync(cls):
         return ["rsync", "--version"]
 
+    @classmethod
+    def check_package_manager(cls):
+        return ["apk", "--version"]
+
+    @classmethod
+    def check_can_exec(cls):
+        return ["true"]
+
+
+class CentOS:
+    @classmethod
+    def name(cls):
+        return "CentOS linux (or dnf-based CentOS clone)"
+
+    @classmethod
+    def get_supervise_command(cls):
+        return [
+            "/bin/bash",
+            "-c",
+            "echo dfsync && dnf install -y supervisor rsync && supervisord -n",
+        ]
+
+    @classmethod
+    def install_rsync(cls):
+        return ["dnf", "install", "-y", "rsync"]
+
+    @classmethod
+    def check_rsync(cls):
+        return ["rsync", "--version"]
+
+    @classmethod
+    def check_package_manager(cls):
+        return ["dnf", "--version"]
+
+    @classmethod
+    def check_can_exec(cls):
+        return ["true"]
+
+
+class Generic:
+    @classmethod
+    def name(cls):
+        return "Generic linux (with bash, rsync and supervisor installed)"
+
+    @classmethod
+    def get_supervise_command(cls):
+        return [
+            "/bin/bash",
+            "-c",
+            "echo dfsync && supervisord -n",
+        ]
+
+    @classmethod
+    def install_rsync(cls):
+        return ["true"]
+
+    @classmethod
+    def check_rsync(cls):
+        return ["rsync", "--version"]
+
+    @classmethod
+    def check_package_manager(cls):
+        return ["true"]
+
+    @classmethod
+    def get_uncrash_command(cls):
+        return ["/bin/sh", "-c", "echo uncrash && sleep 10m"]
+
+    @classmethod
+    def check_can_exec(cls):
+        return ["true"]
+
 
 def please_wait(msg="Please wait"):
     print("⌛  {}...".format(msg))
@@ -40,12 +113,13 @@ class KubeReDeployer:
         config.load_kube_config()
         self.api = client.CoreV1Api()
         self.apps_api = client.AppsV1Api()
+        self._image_distro = None
 
     def supervisor_install(self, pod, spec, status):
         if self._is_supervised(pod, spec, status):
             return
 
-        command = Alpine.get_supervise_command()
+        command = self._image_distro.get_supervise_command()
         deployments = self._set_deployment_command(pod, spec, status, command)
         print("Supervisor installing on {}".format(" ".join(deployments)))
 
@@ -81,14 +155,17 @@ class KubeReDeployer:
             )
         return [d.metadata.name for _, d in deployments.items()]
 
-    def _is_supervised(self, pod, spec, status):
+    def _is_supervised(self, pod, spec, status, command_marker="echo dfsync"):
         if not spec.command:
             return False
 
         for arg in spec.command:
-            if arg.startswith("echo dfsync"):
+            if arg.startswith(command_marker):
                 return True
         return False
+
+    def _is_uncrashed(self, pod, spec, status):
+        return self._is_supervised(pod, spec, status, command_marker="echo uncrash")
 
     def status(self, image_base):
         ready_map = {False: "🔴  ", True: "🟢  ", "dev": "🟠  "}
@@ -105,6 +182,9 @@ class KubeReDeployer:
             elif status.ready and self._is_supervised(pod, spec, status):
                 icon = ready_map["dev"]
                 status_msg = "supervisor is running"
+            elif status.ready and self._is_uncrashed(pod, spec, status):
+                icon = ready_map["dev"]
+                status_msg = "still sleeping, having recovered from crashed state"
 
             print("{}{} - ready: {}".format(icon, pod.metadata.name, status_msg))
         print("")
@@ -131,7 +211,7 @@ class KubeReDeployer:
 
     def get_exec_command(self, namespace, pod_name, container_name):
         py_path = os.path.abspath(sys.executable)
-        cmd = [py_path, os.path.abspath(kube_exec.__file__)]
+        cmd = [py_path, os.path.abspath(__file__)]
         env = {
             **os.environ,
             "KUBEEXEC_POD": pod_name,
@@ -177,9 +257,15 @@ class KubeReDeployer:
 
         for pod, spec, status in self.generate_matching_containers(image_base):
             if not status.ready:
+                reason = "Unknown"
+                if status.state.waiting:
+                    reason = "Waiting - ".format(status.state.waiting.reason)
+                elif status.state.terminated:
+                    reason = "Terminated - ".format(status.state.terminated.reason)
+
                 print(
                     "{} will not sync in {}, container isn't ready: {}".format(
-                        src_file_path, pod.metadata.name, status.state.waiting.reason
+                        src_file_path, pod.metadata.name, reason
                     )
                 )
                 continue
@@ -229,13 +315,70 @@ class KubeReDeployer:
             tty=False,
         )
 
+    def _uncrash(self, pod, spec, status):
+        if status.ready:
+            return
+        if not status.state.waiting and not status.state.terminated:
+            return
+
+        print(
+            "Pod {}, is crashing, attempting deployment recovery".format(
+                pod.metadata.name
+            )
+        )
+        crashing_command = spec.command
+        deployments = self._set_deployment_command(
+            pod, spec, status, Generic.get_uncrash_command()
+        )
+
+        please_wait()
+        w = watch.Watch()
+        for event in w.stream(self.api.list_pod_for_all_namespaces, timeout_seconds=30):
+            event_pod = event["object"]
+            if pod.metadata.name != event_pod.metadata.name:
+                continue
+            for event_status in event_pod.status.container_statuses or []:
+                if event_status.container_id == status.container_id:
+                    if event["type"] == "DELETED":
+                        print("Deployment recovered".format(pod.metadata.name))
+                        w.stop()
+                        return True
+
+        print("Pod {} recovery failed".format(pod.metadata.name))
+        deployments = self._set_deployment_command(pod, spec, status, crashing_command)
+        return False
+
+    def _stabilize(self, pod, spec, status):
+        try:
+            resp = self._exec(pod, spec, status, Generic.check_can_exec())
+            return
+        except:
+            self._uncrash(pod, spec, status)
+
+    def _sniff_image_distro(self, pod, spec, status):
+        for distro in [Alpine, CentOS]:
+            try:
+                resp = self._exec(pod, spec, status, distro.check_package_manager())
+                if resp and "runtime exec failed" in resp:
+                    continue
+
+                return distro
+            except:
+                pass
+
+        print(
+            "Failed to detect container image OS variant. "
+            "Assuming bash, rsync and supervisor are already installed"
+        )
+        return Generic
+
     def dry_run_exec(self, pod, spec, status):
         try:
-            resp = self._exec(pod, spec, status, Alpine.check_rsync())
+            resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
             if resp and "runtime exec failed" in resp:
-                resp = self._exec(pod, spec, status, Alpine.install_rsync())
+                resp = self._exec(pod, spec, status, self._image_distro.install_rsync())
 
-            resp = self._exec(pod, spec, status, Alpine.check_rsync())
+            resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
             if resp and "runtime exec failed" in resp:
                 return False
 
@@ -243,8 +386,22 @@ class KubeReDeployer:
         except:
             return False
 
+    def stabilize_deployments(self, image_base):
+        # Uncrash crashed deployments
+        for pod, spec, status in self.generate_matching_containers(image_base):
+            self._stabilize(pod, spec, status)
+
+    def inspect_deployment_images(self, image_base):
+        distros = set()
+        for pod, spec, status in self.generate_matching_containers(image_base):
+            distro = self._sniff_image_distro(pod, spec, status)
+            distros.add(distro)
+        self._image_distro = list(distros)[0]
+        print(f"Assuming OS in container image: {self._image_distro.name()}")
+
     def toggle_supervisor(self, image_base, action="install"):
         pods = {}
+
         for pod, spec, status in self.generate_matching_containers(image_base):
             if action == "install":
                 self.supervisor_install(pod, spec, status)
@@ -277,6 +434,8 @@ class KubeReDeployer:
 
     def on_monitor_start(self, destination_dir: str = None, **kwargs):
         image_base, _ = self.split_destination(destination_dir)
+        self.stabilize_deployments(image_base)
+        self.inspect_deployment_images(image_base)
         self.toggle_supervisor(image_base, "install")
         self.status(image_base)
         GIT_FILTER.load_ignored_files("./")

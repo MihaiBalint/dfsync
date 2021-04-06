@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "dfsync"
-version = "0.3.0"
+version = "0.3.1"
 description = ""
 authors = ["Mihai Balint <balint.mihai@gmail.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 watchdog = "^2.0.2"
 gitpython = "^3.1.14"
 kubernetes = "^12.0.1"
@@ -19,4 +19,3 @@ dfsync = "dfsync.cli:dfsync"
 [build-system]
 requires = ["poetry>=0.12"]
 build-backend = "poetry.masonry.api"
-

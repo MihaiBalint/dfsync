@@ -45,7 +45,7 @@ class FileChangedEventHandler(FileSystemEventHandler):
             src_file_path=self._get_path_relative_to_watched_dir(event.src_path),
             event=event,
             watched_dir=self.abs_watched_dir,
-            **self.backend_args
+            **self.backend_args,
         )
 
     def _get_path_relative_to_watched_dir(self, path):
@@ -113,6 +113,33 @@ def split_destination(destination):
         return "rsync", destination
 
 
+def usage():
+    print("Usage: {} [source_dir] <destination_path>".format(sys.argv[0]))
+    dfsync = sys.argv[0]
+    msg = f"""Watches a folder for changes and propagates all file changes to a destination.
+
+Example usages:
+1. Watch a dir and sync changes to a target on the local filesystem
+   {dfsync} src /home/user/absolute/paths/to/target/dir
+   {dfsync} . ../../relative/path/to/target/dir
+   {dfsync} ../../relative/path/to/target/dir (if source_dir is omitted, will watch the current dir)
+
+2. Watch a dir and sync changes to a remote target using ssh
+   {dfsync} src user@target-host:/home/user/absolute/paths/to/remote/host/dir
+   {dfsync} build user@target-host:~/relative/path/to/user/home
+
+3. Watch a dir and sync changes to kubernetes pod/containers using the given image name
+   {dfsync} src kube://image-name-of-awesome-api:/home/user/awesome-api
+   {dfsync} kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
+
+{dfsync} is:
+* git-aware: changes to git internals, files matching .gitignore patterns and untracked files will be ignored
+* editor-aware: changes to temporary files created by source code editors will be ignored
+* transparent: every action is diligently logged in the console
+"""
+    print(msg)
+
+
 def main():
     logging.basicConfig(
         level=logging.WARN,
@@ -128,7 +155,7 @@ def main():
     elif len(sys.argv) > 1:
         destination_dir = sys.argv[1]
     else:
-        print("Usage: {} [source_dir] <destination_path>\n".format(sys.argv[0]))
+        usage()
         sys.exit(1)
 
     backend, destination_dir = split_destination(destination_dir)

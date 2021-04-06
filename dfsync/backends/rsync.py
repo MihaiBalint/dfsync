@@ -37,7 +37,7 @@ class FileRsync:
         rsh = ["--rsh={}".format(rsh)] if rsh is not None else []
         blocking_io = ["--blocking-io"] if blocking_io else []
 
-        src_file_path = src_file_path.lstrip("./")
+        src_file_path = sanitize_relative_path(src_file_path)
         destination_dir = destination_dir.rstrip("/")
         destination_dir = "{}/".format(destination_dir)
 
@@ -131,6 +131,18 @@ class FileRsync:
 
     def on_monitor_exit(self, destination_dir: str = None, **kwargs):
         pass
+
+
+def sanitize_relative_path(path):
+    while True:
+        if path.startswith("./"):
+            path = path[2:]
+            continue
+        if path.startswith("/"):
+            path = path[1:]
+            continue
+        break
+    return path
 
 
 rsync_backend = FileRsync()
