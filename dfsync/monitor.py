@@ -1,3 +1,4 @@
+import click
 import os
 import os.path
 import sys
@@ -113,66 +114,64 @@ def split_destination(destination):
         return "rsync", destination
 
 
-def usage():
-    print("Usage: {} [source_dir] <destination_path>".format(sys.argv[0]))
-    dfsync = sys.argv[0]
-    msg = f"""Watches a folder for changes and propagates all file changes to a destination.
+@click.command()
+@click.argument("source", nargs=-1)
+@click.argument("destination", default="", nargs=1)
+@click.option("--supervisor/--no-supervisor", default=False, help="Try to install supervisor in container", type=bool)
+def main(source, destination, supervisor):
+    """
+Watches a folder for changes and propagates all file changes to a destination.
+
+SOURCE is a path to the folder that dfsync will monitor for changes (or current dir if missing)
+
+DESTINATION is a destination path / psuedo-url
 
 Example usages:
+
+\b
 1. Watch a dir and sync changes to a target on the local filesystem
-   {dfsync} src /home/user/absolute/paths/to/target/dir
-   {dfsync} . ../../relative/path/to/target/dir
-   {dfsync} ../../relative/path/to/target/dir (if source_dir is omitted, will watch the current dir)
+   dfsync src /home/user/absolute/paths/to/target/dir
+   dfsync . ../../relative/path/to/target/dir
+   dfsync ../../relative/path/to/target/dir (if source_dir is omitted, will watch the current dir)
 
+\b
 2. Watch a dir and sync changes to a remote target using ssh
-   {dfsync} src user@target-host:/home/user/absolute/paths/to/remote/host/dir
-   {dfsync} build user@target-host:~/relative/path/to/user/home
+   dfsync src user@target-host:/home/user/absolute/paths/to/remote/host/dir
+   dfsync build user@target-host:~/relative/path/to/user/home
 
+\b
 3. Watch a dir and sync changes to kubernetes pod/containers using the given image name
-   {dfsync} src kube://image-name-of-awesome-api:/home/user/awesome-api
-   {dfsync} kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
+   dfsync src kube://image-name-of-awesome-api:/home/user/awesome-api
+   dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
 
-{dfsync} is:
+\b
+dfsync is:
 * git-aware: changes to git internals, files matching .gitignore patterns and untracked files will be ignored
 * editor-aware: changes to temporary files created by source code editors will be ignored
 * transparent: every action is diligently logged in the console
-"""
-    print(msg)
-
-
-def main():
+    """
     logging.basicConfig(
-        level=logging.WARN,
-        format="%(asctime)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        level=logging.WARN, format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
     )
-    path = "."
-    destination_dir = None
 
-    if len(sys.argv) > 2:
-        path = sys.argv[1]
-        destination_dir = sys.argv[2]
-    elif len(sys.argv) > 1:
-        destination_dir = sys.argv[1]
-    else:
-        usage()
-        sys.exit(1)
+    path = "." if len(source) == 0 else source[0]
+    destination_dir = destination
 
     backend, destination_dir = split_destination(destination_dir)
-    print("Destination, {}: '{}'".format(backend, destination_dir))
+    click.echo("Destination, {}: '{}'".format(backend, destination_dir))
     event_handler = FileChangedEventHandler(
-        backend, destination_dir=destination_dir, watched_dir=path
+        backend, destination_dir=destination_dir, watched_dir=path, supervisor=supervisor
     )
     observer = Observer()
     observer.schedule(event_handler, os.path.abspath(path), recursive=True)
     try:
         event_handler.on_monitor_start()
-        print("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
+        click.echo("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
         observer.start()
         while event_handler.raised_exception is False:
             time.sleep(0.2)
     except KeyboardInterrupt:
-        print("Received [Ctrl-C], exiting.")
+        click.echo("Received [Ctrl-C], exiting.")
     finally:
         observer.stop()
         event_handler.on_monitor_exit()

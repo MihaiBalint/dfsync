@@ -19,7 +19,7 @@ class Alpine:
         return [
             "/bin/sh",
             "-c",
-            "echo dfsync && apk --no-cache add supervisor rsync && supervisord -n",
+            "echo dfsync && apk --no-cache add supervisor rsync; supervisord -n",
         ]
 
     @classmethod
@@ -49,7 +49,7 @@ class CentOS:
         return [
             "/bin/bash",
             "-c",
-            "echo dfsync && dnf install -y supervisor rsync && supervisord -n",
+            "echo dfsync && dnf install -y supervisor rsync; supervisord -n",
         ]
 
     @classmethod
@@ -63,6 +63,36 @@ class CentOS:
     @classmethod
     def check_package_manager(cls):
         return ["dnf", "--version"]
+
+    @classmethod
+    def check_can_exec(cls):
+        return ["true"]
+
+
+class Ubuntu:
+    @classmethod
+    def name(cls):
+        return "Ubuntu/Debian linux (or apt-based Debian clone)"
+
+    @classmethod
+    def get_supervise_command(cls):
+        return [
+            "/bin/bash",
+            "-c",
+            "echo dfsync && apt install -y supervisor rsync; supervisord -n",
+        ]
+
+    @classmethod
+    def install_rsync(cls):
+        return ["apt", "install", "-y", "rsync"]
+
+    @classmethod
+    def check_rsync(cls):
+        return ["rsync", "--version"]
+
+    @classmethod
+    def check_package_manager(cls):
+        return ["apt", "--version"]
 
     @classmethod
     def check_can_exec(cls):
@@ -141,17 +171,10 @@ class KubeReDeployer:
 
         for _, deployment in deployments.items():
             patch = client.V1Deployment(
-                api_version="apps/v1",
-                kind="Deployment",
-                metadata=deployment.metadata,
-                spec=deployment.spec,
+                api_version="apps/v1", kind="Deployment", metadata=deployment.metadata, spec=deployment.spec,
             )
             self.apps_api.patch_namespaced_deployment(
-                name=deployment.metadata.name,
-                namespace=namespace,
-                body=patch,
-                async_req=False,
-                _request_timeout=30,
+                name=deployment.metadata.name, namespace=namespace, body=patch, async_req=False, _request_timeout=30,
             )
         return [d.metadata.name for _, d in deployments.items()]
 
@@ -176,9 +199,7 @@ class KubeReDeployer:
             if not status.ready and status.state.waiting:
                 status_msg = "{} - {}".format(status.ready, status.state.waiting.reason)
             elif not status.ready and status.last_state.waiting:
-                status_msg = "{} - {}".format(
-                    status.ready, status.last_state.waiting.reason
-                )
+                status_msg = "{} - {}".format(status.ready, status.last_state.waiting.reason)
             elif status.ready and self._is_supervised(pod, spec, status):
                 icon = ready_map["dev"]
                 status_msg = "supervisor is running"
@@ -265,29 +286,17 @@ class KubeReDeployer:
                     reason = "Terminated - ".format(status.state.terminated.reason)
 
                 print(
-                    "{} will not sync in {}, container isn't ready: {}".format(
-                        src_file_path, pod.metadata.name, reason
-                    )
+                    "{} will not sync in {}, container isn't ready: {}".format(src_file_path, pod.metadata.name, reason)
                 )
                 continue
 
             if not self.dry_run_exec(pod, spec, status):
-                print(
-                    "{} failed to rsync into {}".format(
-                        src_file_path, pod.metadata.name
-                    )
-                )
+                print("{} failed to rsync into {}".format(src_file_path, pod.metadata.name))
                 continue
 
-            container_dir = self.get_container_destination_dir(
-                pod, status, destination_dir
-            )
-            rsh_command, rsh_env = self.get_exec_command(
-                pod.metadata.namespace, pod.metadata.name, status.name
-            )
-            self.sync_files(
-                rsh_command, src_file_path, container_dir, rsh_env=rsh_env, **kwargs
-            )
+            container_dir = self.get_container_destination_dir(pod, status, destination_dir)
+            rsh_command, rsh_env = self.get_exec_command(pod.metadata.namespace, pod.metadata.name, status.name)
+            self.sync_files(rsh_command, src_file_path, container_dir, rsh_env=rsh_env, **kwargs)
             # self.redeploy_container(pod, spec, status)
 
     def sync_files(self, rsh_command, src_file, destination_dir: str = None, **kwargs):
@@ -322,15 +331,9 @@ class KubeReDeployer:
         if not status.state.waiting and not status.state.terminated:
             return
 
-        print(
-            "Pod {}, is crashing, attempting deployment recovery".format(
-                pod.metadata.name
-            )
-        )
+        print("Pod {}, is crashing, attempting deployment recovery".format(pod.metadata.name))
         crashing_command = spec.command
-        deployments = self._set_deployment_command(
-            pod, spec, status, Generic.get_uncrash_command()
-        )
+        deployments = self._set_deployment_command(pod, spec, status, Generic.get_uncrash_command())
 
         please_wait()
         w = watch.Watch()
@@ -357,7 +360,7 @@ class KubeReDeployer:
             self._uncrash(pod, spec, status)
 
     def _sniff_image_distro(self, pod, spec, status):
-        for distro in [Alpine, CentOS]:
+        for distro in [Alpine, CentOS, Ubuntu]:
             try:
                 resp = self._exec(pod, spec, status, distro.check_package_manager())
                 if resp and "runtime exec failed" in resp:
@@ -367,10 +370,7 @@ class KubeReDeployer:
             except:
                 pass
 
-        print(
-            "Failed to detect container image OS variant. "
-            "Assuming bash, rsync and supervisor are already installed"
-        )
+        print("Failed to detect container image OS variant. Assuming bash, rsync and supervisor are already installed")
         return Generic
 
     def dry_run_exec(self, pod, spec, status):
@@ -433,18 +433,21 @@ class KubeReDeployer:
         if len(pods) > 0:
             print("Time-out waiting for pods: {}".format(", ".join(pods.keys())))
 
-    def on_monitor_start(self, destination_dir: str = None, **kwargs):
+    def on_monitor_start(self, destination_dir: str = None, supervisor: bool = True, **kwargs):
         image_base, _ = self.split_destination(destination_dir)
-        self.stabilize_deployments(image_base)
+        if supervisor:
+            self.stabilize_deployments(image_base)
         self.inspect_deployment_images(image_base)
-        self.toggle_supervisor(image_base, "install")
+        if supervisor:
+            self.toggle_supervisor(image_base, "install")
         self.status(image_base)
         GIT_FILTER.load_ignored_files("./")
         self.sync("./", destination_dir, **kwargs)
 
-    def on_monitor_exit(self, destination_dir: str = None, **kwargs):
+    def on_monitor_exit(self, destination_dir: str = None, supervisor: bool = True, **kwargs):
         image_base, _ = self.split_destination(destination_dir)
-        self.toggle_supervisor(image_base, "uninstall")
+        if supervisor:
+            self.toggle_supervisor(image_base, "uninstall")
         self.status(image_base)
 
 
