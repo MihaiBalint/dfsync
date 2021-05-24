@@ -28,10 +28,8 @@ class FileChangedEventHandler(FileSystemEventHandler):
     def __init__(self, backend: str = "log", watched_dir: str = ".", **kwargs):
         self.filters = [*ALL_FILTERS]
 
-        self.backend = BACKENDS.get(backend)
-        if self.backend is None:
-            raise ValueError("Backend not found: {}".format(backend))
-        self.backend_args = kwargs
+        self.backend = backend
+        self.backend_options = kwargs
         self.raised_exception = False
         self.abs_watched_dir = os.path.abspath(watched_dir)
 
@@ -42,19 +40,17 @@ class FileChangedEventHandler(FileSystemEventHandler):
         # It seems like in some contexts, event.src_path will be an absolute path
         # and in some other contexts, it will be a relative path
 
+        src_file_path = self._get_path_relative_to_watched_dir(event.src_path, self.abs_watched_dir)
         self.backend.sync(
-            src_file_path=self._get_path_relative_to_watched_dir(event.src_path),
-            event=event,
-            watched_dir=self.abs_watched_dir,
-            **self.backend_args,
+            src_file_path=src_file_path, event=event, watched_dir=self.abs_watched_dir, **self.backend_options,
         )
 
-    def _get_path_relative_to_watched_dir(self, path):
+    def _get_path_relative_to_watched_dir(self, path, parent_path):
         try:
             abs_path = os.path.abspath(path)
-            common = os.path.commonpath([self.abs_watched_dir, abs_path])
+            common = os.path.commonpath([parent_path, abs_path])
 
-            rel_watched = os.path.relpath(self.abs_watched_dir, start=common)
+            rel_watched = os.path.relpath(parent_path, start=common)
             rel_path = os.path.relpath(abs_path, start=common)
 
             # Sanity checks
@@ -98,12 +94,6 @@ class FileChangedEventHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         self.catch_all_handler(event)
-
-    def on_monitor_start(self):
-        self.backend.on_monitor_start(**self.backend_args)
-
-    def on_monitor_exit(self):
-        self.backend.on_monitor_exit(**self.backend_args)
 
 
 def split_destination(destination):
@@ -154,27 +144,40 @@ dfsync is:
         level=logging.WARN, format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    path = "." if len(source) == 0 else source[0]
+    paths = ["."] if len(source) == 0 else source
     destination_dir = destination
 
     backend, destination_dir = split_destination(destination_dir)
     click.echo("Destination, {}: '{}'".format(backend, destination_dir))
-    event_handler = FileChangedEventHandler(
-        backend, destination_dir=destination_dir, watched_dir=path, supervisor=supervisor
-    )
+
+    backend_options = dict(destination_dir=destination_dir, supervisor=supervisor)
+    backend_engine = BACKENDS.get(backend)
+    if backend_engine is None:
+        raise ValueError("Backend not found: {}".format(backend))
+
+    handlers = []
     observer = Observer()
-    observer.schedule(event_handler, os.path.abspath(path), recursive=True)
+    for p in paths:
+        event_handler = FileChangedEventHandler(backend_engine, watched_dir=p, **backend_options)
+        handlers.append(event_handler)
+        observer.schedule(event_handler, os.path.abspath(p), recursive=True)
     try:
-        event_handler.on_monitor_start()
-        click.echo("Watching dir: '{}', press [Ctrl-C] to exit\n".format(path))
+        backend_engine.on_monitor_start(src_file_paths=paths, **backend_options)
+        click.echo("Watching dir(s): '{}'; press [Ctrl-C] to exit\n".format("', '".join(paths)))
         observer.start()
-        while event_handler.raised_exception is False:
+
+        no_errors = True
+        while no_errors:
+            for event_handler in handlers:
+                if event_handler.raised_exception:
+                    no_errors = False
+                    break
             time.sleep(0.2)
     except KeyboardInterrupt:
         click.echo("Received [Ctrl-C], exiting.")
     finally:
         observer.stop()
-        event_handler.on_monitor_exit()
+        backend_engine.on_monitor_exit(**backend_options)
         observer.join()
 
 

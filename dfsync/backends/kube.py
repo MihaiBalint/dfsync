@@ -297,7 +297,6 @@ class KubeReDeployer:
             container_dir = self.get_container_destination_dir(pod, status, destination_dir)
             rsh_command, rsh_env = self.get_exec_command(pod.metadata.namespace, pod.metadata.name, status.name)
             self.sync_files(rsh_command, src_file_path, container_dir, rsh_env=rsh_env, **kwargs)
-            # self.redeploy_container(pod, spec, status)
 
     def sync_files(self, rsh_command, src_file, destination_dir: str = None, **kwargs):
         rsh_destination = ":{}".format(destination_dir)
@@ -307,8 +306,10 @@ class KubeReDeployer:
             "rsh": rsh_command,
             "blocking_io": True,
         }
-        if src_file == "./":
+        if isinstance(src_file, (tuple, list)):
             rsync_backend.sync_project(src_file, **rsync_args)
+        elif src_file == "./":
+            rsync_backend.sync_project([src_file], **rsync_args)
         else:
             rsync_backend.sync(src_file, **rsync_args)
 
@@ -433,7 +434,9 @@ class KubeReDeployer:
         if len(pods) > 0:
             print("Time-out waiting for pods: {}".format(", ".join(pods.keys())))
 
-    def on_monitor_start(self, destination_dir: str = None, supervisor: bool = True, **kwargs):
+    def on_monitor_start(
+        self, src_file_paths: list = None, destination_dir: str = None, supervisor: bool = True, **kwargs
+    ):
         image_base, _ = self.split_destination(destination_dir)
         if supervisor:
             self.stabilize_deployments(image_base)
@@ -441,8 +444,9 @@ class KubeReDeployer:
         if supervisor:
             self.toggle_supervisor(image_base, "install")
         self.status(image_base)
-        GIT_FILTER.load_ignored_files("./")
-        self.sync("./", destination_dir, **kwargs)
+        for p in src_file_paths:
+            GIT_FILTER.load_ignored_files(p)
+        self.sync(src_file_paths, destination_dir, **kwargs)
 
     def on_monitor_exit(self, destination_dir: str = None, supervisor: bool = True, **kwargs):
         image_base, _ = self.split_destination(destination_dir)
