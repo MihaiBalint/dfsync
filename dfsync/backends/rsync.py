@@ -13,7 +13,7 @@ EVENT_TYPE_MAP = {
 
 
 class FileRsync:
-    def __init__(self):
+    def __init__(self, **kwargs):
         pass
 
     def sync(self, src_file_path, event=None, watched_dir: str = None, **kwargs):
@@ -149,4 +149,4 @@ def sanitize_relative_path(path):
     return path
 
 
-rsync_backend = FileRsync()
+rsync_backend = FileRsync

@@ -1,12 +1,17 @@
 import sys
 import os
 import os.path
+import json
 
+from urllib.parse import urlparse
 from kubernetes import client, config, watch
 from kubernetes.stream import stream
 
 from dfsync.filters import GIT_FILTER
 from .rsync import rsync_backend
+
+DEFAULT_COMMAND = []
+DEFAULT_PULL_POLICY = "Always"
 
 
 class Alpine:
@@ -19,7 +24,7 @@ class Alpine:
         return [
             "/bin/sh",
             "-c",
-            "echo dfsync && apk --no-cache add supervisor rsync; supervisord -n",
+            "echo dfsync && apk --no-cache add rsync; while true; do sleep 1; done",
         ]
 
     @classmethod
@@ -49,7 +54,7 @@ class CentOS:
         return [
             "/bin/bash",
             "-c",
-            "echo dfsync && dnf install -y supervisor rsync; supervisord -n",
+            "echo dfsync && dnf install -y rsync; while true; do sleep 1; done",
         ]
 
     @classmethod
@@ -79,7 +84,7 @@ class Ubuntu:
         return [
             "/bin/bash",
             "-c",
-            "echo dfsync && apt install -y supervisor rsync; supervisord -n",
+            "echo dfsync && apt install -y rsync; while true; do sleep 1; done",
         ]
 
     @classmethod
@@ -107,9 +112,9 @@ class Generic:
     @classmethod
     def get_supervise_command(cls):
         return [
-            "/bin/bash",
+            "/bin/sh",
             "-c",
-            "echo dfsync && supervisord -n",
+            "echo dfsync && while true; do sleep 1; done",
         ]
 
     @classmethod
@@ -137,12 +142,68 @@ def please_wait(msg="Please wait"):
     print("⌛  {}...".format(msg))
 
 
+def get_selected_kubernetes(kube_host=None):
+    contexts, active_context = config.list_kube_config_contexts()
+    if not contexts:
+        raise ValueError("Cannot find any kubernetes contexts in kube-config file")
+
+    context_apis = []
+    selected_context = None
+    selected_context_api = None
+    active_context_api = None
+    multiple_matches = False
+    for c in contexts:
+        ctx_client = client.CoreV1Api(api_client=config.new_client_from_config(context=c["name"]))
+        context_apis.append([c, ctx_client])
+
+        ctx_api_host = ctx_client.api_client.configuration.host
+        if c["name"] == active_context["name"]:
+            active_context_api = ctx_client
+
+        if kube_host is not None and kube_host.lower() == ctx_api_host.lower():
+            if selected_context is None:
+                selected_context = c
+                selected_context_api = ctx_client
+            else:
+                multiple_matches = True
+
+    if len(contexts) > 1 or multiple_matches or (kube_host is not None and selected_context is None):
+        print(f"Multiple kubernetes contexts in kube-config:")
+
+        for c, ctx_client in context_apis:
+            ctx_api_host = ctx_client.api_client.configuration.host
+            tags = []
+            if c == selected_context:
+                tags.append("ACTIVE-SELECTED")
+            elif c["name"] == active_context["name"]:
+                tags.append("ACTIVE")
+
+            if len(tags) > 0:
+                tags_str = ",".join(tags)
+                print(f"  * {c['name']} on {ctx_api_host} [{tags_str}]")
+            else:
+                print(f"  * {c['name']} on {ctx_api_host}")
+
+    if kube_host is not None and selected_context is None:
+        raise ValueError(f"None of the kubernetes contexts match '{kube_host}'")
+
+    if selected_context is None:
+        selected_context = active_context
+        selected_context_api = active_context_api
+    return selected_context, selected_context_api
+
+
 class KubeReDeployer:
-    def __init__(self):
-        # Configs can be set in Configuration class directly or using helper utility
+    def __init__(self, kube_host=None, **kwargs):
         config.load_kube_config()
-        self.api = client.CoreV1Api()
-        self.apps_api = client.AppsV1Api()
+
+        selected_context, selected_context_api = get_selected_kubernetes(kube_host)
+
+        self.context_name = selected_context["name"]
+        self.api = selected_context_api
+        self.apps_api = client.AppsV1Api(api_client=config.new_client_from_config(context=self.context_name))
+
+        print(f"Using cluster: {self.context_name} on {self.api.api_client.configuration.host}")
         self._image_distro = None
 
     def supervisor_install(self, pod, spec, status):
@@ -157,38 +218,89 @@ class KubeReDeployer:
         if not self._is_supervised(pod, spec, status):
             return
 
-        deployments = self._set_deployment_command(pod, spec, status, command=[])
+        deployments = self._reset_deployment_command(pod, spec, status)
         print("Supervisor uninstalling from {}".format(" ".join(deployments)))
 
+    def _set_dfsync_annotation(self, deployment, data: dict):
+        anno_key = "dfsync.localgrid.io"
+        annotations = {**self._get_dfsync_annotation(deployment), **data}
+        deployment.metadata.annotations[anno_key] = json.dumps(annotations)
+        return annotations
+
+    def _get_dfsync_annotation(self, deployment):
+        anno_key = "dfsync.localgrid.io"
+        annotations_str = deployment.metadata.annotations.get(anno_key, "{}")
+        return json.loads(annotations_str)
+
     def _set_deployment_command(self, pod, spec, status, command):
+        # image_pull_policy="IfNotPresent",
+        return self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
+
+    def _reset_deployment_command(self, pod, spec, status):
+        return self._edit_deployment(pod, spec, status)
+
+    def _edit_deployment(self, pod, spec, status, **kwargs):
         namespace = pod.metadata.namespace
         deployments = {}
+        is_undo = len(kwargs) == 0
         for deployment, container_spec in self.list_deployments(namespace, spec.image):
             if spec.name != container_spec.name:
                 continue
-            container_spec.command = command
+
+            if is_undo:
+                kwargs = self._get_dfsync_annotation(deployment) or {}
+            else:
+                self._set_dfsync_annotation(deployment, {k: getattr(container_spec, k) for k, v in kwargs.items()})
+
+            for k, v in kwargs.items():
+                if is_undo and k == "command" and self._is_dfsync_command(v):
+                    print("Clearing dfsync metadata annotations")
+                    container_spec.image_pull_policy = DEFAULT_PULL_POLICY
+                    container_spec.command = DEFAULT_COMMAND
+                elif k == "command":
+                    # Yeah, None seems to be a special value that does not work as well as the empty list
+                    container_spec.command = v or []
+                else:
+                    setattr(container_spec, k, v)
+
             deployments[deployment.metadata.uid] = deployment
 
         for _, deployment in deployments.items():
             patch = client.V1Deployment(
-                api_version="apps/v1", kind="Deployment", metadata=deployment.metadata, spec=deployment.spec,
+                api_version="apps/v1",
+                kind="Deployment",
+                metadata=deployment.metadata,
+                spec=deployment.spec,
             )
             self.apps_api.patch_namespaced_deployment(
-                name=deployment.metadata.name, namespace=namespace, body=patch, async_req=False, _request_timeout=30,
+                name=deployment.metadata.name,
+                namespace=namespace,
+                body=patch,
+                async_req=False,
+                _request_timeout=30,
             )
         return [d.metadata.name for _, d in deployments.items()]
 
-    def _is_supervised(self, pod, spec, status, command_marker="echo dfsync"):
-        if not spec.command:
+    def _is_dfsync_command(self, command, markers: list = None):
+        if command is None:
             return False
+        if not isinstance(command, list):
+            command = [command]
 
-        for arg in spec.command:
-            if arg.startswith(command_marker):
-                return True
+        command_markers = ["echo dfsync", "echo uncrash"]
+        if markers is not None:
+            command_markers = markers
+        for arg in command:
+            for mrk in command_markers:
+                if arg.startswith(mrk):
+                    return True
         return False
 
+    def _is_supervised(self, pod, spec, status):
+        return self._is_dfsync_command(spec.command, markers=["echo dfsync"])
+
     def _is_uncrashed(self, pod, spec, status):
-        return self._is_supervised(pod, spec, status, command_marker="echo uncrash")
+        return self._is_dfsync_command(spec.command, markers=["echo uncrash"])
 
     def status(self, image_base):
         ready_map = {False: "🔴  ", True: "🟢  ", "dev": "🟠  "}
@@ -253,11 +365,16 @@ class KubeReDeployer:
 
     def generate_matching_containers(self, image_base):
         result = self.api.list_pod_for_all_namespaces(watch=False)
+
         for pod in result.items:
             for spec, status in self.list_containers(pod):
                 if not status:
                     continue
-                if not status.image.startswith(image_base):
+
+                parsed = urlparse(status.image_id)
+                pod_images = [status.image, f"{parsed.netloc}{parsed.path}"]
+
+                if not any(i.startswith(image_base) for i in pod_images):
                     continue
                 yield pod, spec, status
 
@@ -333,8 +450,7 @@ class KubeReDeployer:
             return
 
         print("Pod {}, is crashing, attempting deployment recovery".format(pod.metadata.name))
-        crashing_command = spec.command
-        deployments = self._set_deployment_command(pod, spec, status, Generic.get_uncrash_command())
+        deployments = self._set_deployment_command(pod, spec, status, command=Generic.get_uncrash_command())
 
         please_wait()
         w = watch.Watch()
@@ -350,7 +466,7 @@ class KubeReDeployer:
                         return True
 
         print("Pod {} recovery failed".format(pod.metadata.name))
-        deployments = self._set_deployment_command(pod, spec, status, crashing_command)
+        deployments = self._reset_deployment_command(pod, spec, status)
         return False
 
     def _stabilize(self, pod, spec, status):
@@ -398,6 +514,11 @@ class KubeReDeployer:
         for pod, spec, status in self.generate_matching_containers(image_base):
             distro = self._sniff_image_distro(pod, spec, status)
             distros.add(distro)
+
+        if not len(distros):
+            self._image_distro = Generic
+            return
+
         self._image_distro = list(distros)[0]
         print(f"Assuming OS in container image: {self._image_distro.name()}")
 
@@ -455,4 +576,4 @@ class KubeReDeployer:
         self.status(image_base)
 
 
-kube_backend = KubeReDeployer()
+kube_backend = KubeReDeployer

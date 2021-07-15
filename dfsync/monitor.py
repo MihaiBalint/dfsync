@@ -42,7 +42,10 @@ class FileChangedEventHandler(FileSystemEventHandler):
 
         src_file_path = self._get_path_relative_to_watched_dir(event.src_path, self.abs_watched_dir)
         self.backend.sync(
-            src_file_path=src_file_path, event=event, watched_dir=self.abs_watched_dir, **self.backend_options,
+            src_file_path=src_file_path,
+            event=event,
+            watched_dir=self.abs_watched_dir,
+            **self.backend_options,
         )
 
     def _get_path_relative_to_watched_dir(self, path, parent_path):
@@ -108,40 +111,43 @@ def split_destination(destination):
 @click.argument("source", nargs=-1)
 @click.argument("destination", default="", nargs=1)
 @click.option("--supervisor/--no-supervisor", default=False, help="Try to install supervisor in container", type=bool)
-def main(source, destination, supervisor):
+@click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
+def main(source, destination, supervisor, kube_host):
     """
-Watches a folder for changes and propagates all file changes to a destination.
+    Watches a folder for changes and propagates all file changes to a destination.
 
-SOURCE is a path to the folder that dfsync will monitor for changes (or current dir if missing)
+    SOURCE is a path to the folder that dfsync will monitor for changes (or current dir if missing)
 
-DESTINATION is a destination path / psuedo-url
+    DESTINATION is a destination path / psuedo-url
 
-Example usages:
+    Example usages:
 
-\b
-1. Watch a dir and sync changes to a target on the local filesystem
-   dfsync src /home/user/absolute/paths/to/target/dir
-   dfsync . ../../relative/path/to/target/dir
-   dfsync ../../relative/path/to/target/dir (if source_dir is omitted, will watch the current dir)
+    \b
+    1. Watch a dir and sync changes to a target on the local filesystem
+       dfsync src /home/user/absolute/paths/to/target/dir
+       dfsync . ../../relative/path/to/target/dir
+       dfsync ../../relative/path/to/target/dir (if source_dir is omitted, will watch the current dir)
 
-\b
-2. Watch a dir and sync changes to a remote target using ssh
-   dfsync src user@target-host:/home/user/absolute/paths/to/remote/host/dir
-   dfsync build user@target-host:~/relative/path/to/user/home
+    \b
+    2. Watch a dir and sync changes to a remote target using ssh
+       dfsync src user@target-host:/home/user/absolute/paths/to/remote/host/dir
+       dfsync build user@target-host:~/relative/path/to/user/home
 
-\b
-3. Watch a dir and sync changes to kubernetes pod/containers using the given image name
-   dfsync src kube://image-name-of-awesome-api:/home/user/awesome-api
-   dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
+    \b
+    3. Watch a dir and sync changes to kubernetes pod/containers using the given image name
+       dfsync src kube://image-name-of-awesome-api:/home/user/awesome-api
+       dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
 
-\b
-dfsync is:
-* git-aware: changes to git internals, files matching .gitignore patterns and untracked files will be ignored
-* editor-aware: changes to temporary files created by source code editors will be ignored
-* transparent: every action is diligently logged in the console
+    \b
+    dfsync is:
+    * git-aware: changes to git internals, files matching .gitignore patterns and untracked files will be ignored
+    * editor-aware: changes to temporary files created by source code editors will be ignored
+    * transparent: every action is diligently logged in the console
     """
     logging.basicConfig(
-        level=logging.WARN, format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
+        level=logging.WARN,
+        format="%(asctime)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     paths = ["."] if len(source) == 0 else source
@@ -150,8 +156,9 @@ dfsync is:
     backend, destination_dir = split_destination(destination_dir)
     click.echo("Destination, {}: '{}'".format(backend, destination_dir))
 
-    backend_options = dict(destination_dir=destination_dir, supervisor=supervisor)
-    backend_engine = BACKENDS.get(backend)
+    backend_options = dict(destination_dir=destination_dir, supervisor=supervisor, kube_host=kube_host)
+    backend_engine_factory = BACKENDS.get(backend)
+    backend_engine = backend_engine_factory(**backend_options)
     if backend_engine is None:
         raise ValueError("Backend not found: {}".format(backend))
 
