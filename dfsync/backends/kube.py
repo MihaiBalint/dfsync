@@ -147,6 +147,9 @@ def get_selected_kubernetes(kube_host=None):
     if not contexts:
         raise ValueError("Cannot find any kubernetes contexts in kube-config file")
 
+    # TODO: remove this statement once kube_exec has been updated to work with an arbitrary context
+    kube_host = None
+
     context_apis = []
     selected_context = None
     selected_context_api = None
@@ -183,6 +186,8 @@ def get_selected_kubernetes(kube_host=None):
                 print(f"  * {c['name']} on {ctx_api_host} [{tags_str}]")
             else:
                 print(f"  * {c['name']} on {ctx_api_host}")
+        if kube_host is None:
+            print(f"Use 'kubectl config set current-context <name>' to set the current context\n")
 
     if kube_host is not None and selected_context is None:
         raise ValueError(f"None of the kubernetes contexts match '{kube_host}'")
@@ -204,6 +209,7 @@ class KubeReDeployer:
         self.apps_api = client.AppsV1Api(api_client=config.new_client_from_config(context=self.context_name))
 
         print(f"Using cluster: {self.context_name} on {self.api.api_client.configuration.host}")
+        self.rsync_backend_instance = rsync_backend()
         self._image_distro = None
 
     def supervisor_install(self, pod, spec, status):
@@ -424,11 +430,11 @@ class KubeReDeployer:
             "blocking_io": True,
         }
         if isinstance(src_file, (tuple, list)):
-            rsync_backend.sync_project(src_file, **rsync_args)
+            self.rsync_backend_instance.sync_project(src_file, **rsync_args)
         elif src_file == "./":
-            rsync_backend.sync_project([src_file], **rsync_args)
+            self.rsync_backend_instance.sync_project([src_file], **rsync_args)
         else:
-            rsync_backend.sync(src_file, **rsync_args)
+            self.rsync_backend_instance.sync(src_file, **rsync_args)
 
     def _exec(self, pod, spec, status, command: list):
         return stream(
