@@ -112,7 +112,8 @@ def split_destination(destination):
 @click.argument("destination", default="", nargs=1)
 @click.option("--supervisor/--no-supervisor", default=False, help="Try to install supervisor in container", type=bool)
 @click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
-def main(source, destination, supervisor, kube_host):
+@click.option("--pod-timeout", default=30, help="Pod reconfiguration timeout (default is 30 seconds)", type=int)
+def main(source, destination, supervisor, kube_host, pod_timeout):
     """
     Watches a folder for changes and propagates all file changes to a destination.
 
@@ -156,7 +157,9 @@ def main(source, destination, supervisor, kube_host):
     backend, destination_dir = split_destination(destination_dir)
     click.echo("Destination, {}: '{}'".format(backend, destination_dir))
 
-    backend_options = dict(destination_dir=destination_dir, supervisor=supervisor, kube_host=kube_host)
+    backend_options = dict(
+        destination_dir=destination_dir, supervisor=supervisor, kube_host=kube_host, pod_timeout=pod_timeout
+    )
     backend_engine_factory = BACKENDS.get(backend)
     backend_engine = backend_engine_factory(**backend_options)
     if backend_engine is None:

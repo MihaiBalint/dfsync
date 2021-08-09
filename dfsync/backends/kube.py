@@ -200,7 +200,7 @@ def get_selected_kubernetes(kube_host=None):
 
 
 class KubeReDeployer:
-    def __init__(self, kube_host=None, **kwargs):
+    def __init__(self, kube_host=None, pod_timeout=30, **kwargs):
         config.load_kube_config()
 
         selected_context, selected_context_api = get_selected_kubernetes(kube_host)
@@ -212,6 +212,7 @@ class KubeReDeployer:
         print(f"Using cluster: {self.context_name} on {self.api.api_client.configuration.host}")
         self.rsync_backend_instance = rsync_backend()
         self._image_distro = None
+        self.pod_timeout = pod_timeout
 
     def supervisor_install(self, pod, spec, status):
         if self._is_supervised(pod, spec, status):
@@ -547,7 +548,7 @@ class KubeReDeployer:
         please_wait()
         w = watch.Watch()
         cleanup_started = False
-        for event in w.stream(self.api.list_pod_for_all_namespaces, timeout_seconds=30):
+        for event in w.stream(self.api.list_pod_for_all_namespaces, timeout_seconds=self.pod_timeout):
             pod = event["object"]
             if pod.metadata.name not in pods:
                 continue
@@ -561,7 +562,11 @@ class KubeReDeployer:
             if len(pods) == 0:
                 w.stop()
         if len(pods) > 0:
-            print("Time-out waiting for pods: {}".format(", ".join(pods.keys())))
+            pod_keys = ", ".join(pods.keys())
+            print(
+                f"Time-out ({self.pod_timeout}s) waiting for pods: {pod_keys}\n"
+                f"Increasing the pod reconfiguration timeout using --pod-timeout={self.pod_timeout+60} might help"
+            )
 
     def on_monitor_start(
         self, src_file_paths: list = None, destination_dir: str = None, supervisor: bool = True, **kwargs
