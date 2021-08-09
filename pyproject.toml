@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dfsync"
-version = "0.3.7"
+version = "0.3.8"
 description = ""
 authors = ["Mihai Balint <balint.mihai@gmail.com>"]
 
