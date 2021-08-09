@@ -147,9 +147,6 @@ def get_selected_kubernetes(kube_host=None):
     if not contexts:
         raise ValueError("Cannot find any kubernetes contexts in kube-config file")
 
-    # TODO: remove this statement once kube_exec has been updated to work with an arbitrary context
-    kube_host = None
-
     context_apis = []
     selected_context = None
     selected_context_api = None
@@ -187,7 +184,11 @@ def get_selected_kubernetes(kube_host=None):
             else:
                 print(f"  * {c['name']} on {ctx_api_host}")
         if kube_host is None:
-            print(f"Use 'kubectl config set current-context <name>' to set the current context\n")
+            ctx_api_host = active_context_api.api_client.configuration.host
+            print(
+                f"Add --kube-host={ctx_api_host} to use a specific kubernetes API host\n"
+                f"Alternatively, use 'kubectl config set current-context <name>' to set the current context"
+            )
 
     if kube_host is not None and selected_context is None:
         raise ValueError(f"None of the kubernetes contexts match '{kube_host}'")
@@ -354,6 +355,7 @@ class KubeReDeployer:
         cmd = [py_path, os.path.join(backends_dir, "kube_exec.py")]
         env = {
             **os.environ,
+            "KUBEEXEC_CONTEXT": self.context_name,
             "KUBEEXEC_POD": pod_name,
             "KUBEEXEC_NAMESPACE": namespace,
             "KUBEEXEC_CONTAINER": container_name,

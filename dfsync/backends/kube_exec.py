@@ -7,11 +7,15 @@ import sys
 from kubernetes import client, config
 
 
-def get_kubectl_exec_command(namespace, pod_name, container_name):
+def get_kubectl_exec_command(namespace, pod_name, container_name, kube_config=None, kube_context=None):
+    kubeconfig = [f"--kubeconfig={kube_config}"] if kube_config else []
+    context = [f"--context={kube_context}"] if kube_context else []
+
     ns = ["-n", "{}".format(namespace)] if namespace else []
     pod_name = ["{}".format(pod_name)]
     ctnr = ["-c", "{}".format(container_name)] if container_name else []
-    return ["kubectl", "exec", *pod_name, "-i", *ns, *ctnr, "--"]
+
+    return ["kubectl", *kubeconfig, *context, "exec", *pod_name, "-i", *ns, *ctnr, "--"]
 
 
 def get_container_command():
@@ -33,6 +37,8 @@ def main():
         os.environ.get("KUBEEXEC_NAMESPACE"),
         pod_name,
         os.environ.get("KUBEEXEC_CONTAINER"),
+        os.environ.get("KUBEEXEC_KUBECONFIG"),
+        os.environ.get("KUBEEXEC_CONTEXT"),
     )
 
     container_cmd = get_container_command()
