@@ -52,7 +52,7 @@
           ```
 ---
         
-### Command-line usages Example
+### 📈 Command-line usages Example
 ##### Example Usages:
 1. Watch src directory and sync changes to a destination on the local file system.
    ```bash
@@ -82,7 +82,7 @@
      $ dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
     ```
 ---
-### Command-line Reference
+### 👀 Command-line Reference
 ```bash
 $ dfsync --help
 Usage: dfsync [OPTIONS] [SOURCE]... [DESTINATION]
