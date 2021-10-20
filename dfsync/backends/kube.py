@@ -20,11 +20,12 @@ class Alpine:
         return "Alpine linux (or apk-based Alpine clone)"
 
     @classmethod
-    def get_supervise_command(cls):
+    def get_supervise_command(cls, container_command):
+        container_command = container_command or "while true; do sleep 1; done"
         return [
             "/bin/sh",
             "-c",
-            "echo dfsync && apk --no-cache add rsync; while true; do sleep 1; done",
+            f"echo dfsync && apk --no-cache add rsync; {container_command}",
         ]
 
     @classmethod
@@ -50,11 +51,12 @@ class CentOS:
         return "CentOS linux (or dnf-based CentOS clone)"
 
     @classmethod
-    def get_supervise_command(cls):
+    def get_supervise_command(cls, container_command):
+        container_command = container_command or "while true; do sleep 1; done"
         return [
             "/bin/bash",
             "-c",
-            "echo dfsync && dnf install -y rsync; while true; do sleep 1; done",
+            f"echo dfsync && dnf install -y rsync; {container_command}",
         ]
 
     @classmethod
@@ -80,11 +82,12 @@ class Ubuntu:
         return "Ubuntu/Debian linux (or apt-based Debian clone)"
 
     @classmethod
-    def get_supervise_command(cls):
+    def get_supervise_command(cls, container_command):
+        container_command = container_command or "while true; do sleep 1; done"
         return [
             "/bin/bash",
             "-c",
-            "echo dfsync && apt install -y rsync; while true; do sleep 1; done",
+            f"echo dfsync && apt install -y rsync; {container_command}",
         ]
 
     @classmethod
@@ -110,11 +113,12 @@ class Generic:
         return "Generic linux (with bash, rsync and supervisor installed)"
 
     @classmethod
-    def get_supervise_command(cls):
+    def get_supervise_command(cls, container_command):
+        container_command = container_command or "while true; do sleep 1; done"
         return [
             "/bin/sh",
             "-c",
-            "echo dfsync && while true; do sleep 1; done",
+            f"echo dfsync && {container_command}",
         ]
 
     @classmethod
@@ -200,7 +204,7 @@ def get_selected_kubernetes(kube_host=None):
 
 
 class KubeReDeployer:
-    def __init__(self, kube_host=None, pod_timeout=30, **kwargs):
+    def __init__(self, kube_host=None, pod_timeout=30, container_command=None, **kwargs):
         config.load_kube_config()
 
         selected_context, selected_context_api = get_selected_kubernetes(kube_host)
@@ -213,12 +217,13 @@ class KubeReDeployer:
         self.rsync_backend_instance = rsync_backend()
         self._image_distro = None
         self.pod_timeout = pod_timeout
+        self.container_command = container_command
 
     def supervisor_install(self, pod, spec, status):
         if self._is_supervised(pod, spec, status):
             return
 
-        command = self._image_distro.get_supervise_command()
+        command = self._image_distro.get_supervise_command(self.container_command)
         deployments = self._set_deployment_command(pod, spec, status, command)
         print("Supervisor installing on {}".format(" ".join(deployments)))
 
