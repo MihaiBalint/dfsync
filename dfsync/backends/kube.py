@@ -258,14 +258,14 @@ class KubeReDeployer:
             if is_undo:
                 kwargs = self._get_dfsync_annotation(deployment) or {}
             else:
-                self._set_dfsync_annotation(deployment, {k: getattr(container_spec, k) for k, v in kwargs.items()})
+                self._set_dfsync_annotation(deployment, marshall_dfsync_annotation(container_spec, kwargs.keys()))
 
             for k, v in kwargs.items():
                 if is_undo and k == "command" and self._is_dfsync_command(v):
                     print("Clearing dfsync metadata annotations")
                     container_spec.image_pull_policy = DEFAULT_PULL_POLICY
                     container_spec.command = DEFAULT_COMMAND
-                elif k == "command":
+                elif k in ["command"]:
                     # Yeah, None seems to be a special value that does not work as well as the empty list
                     container_spec.command = v or []
                 else:
@@ -587,6 +587,21 @@ class KubeReDeployer:
         if supervisor:
             self.toggle_supervisor(image_base, "uninstall")
         self.status(image_base)
+
+
+def marshall_dfsync_annotation(container_spec, property_keys):
+    return {k: marshall_spec_property(container_spec, k) for k in property_keys}
+
+
+def marshall_spec_property(container_spec, key):
+    value = getattr(container_spec, key)
+
+    if value is None or isinstance(value, (str, list)):
+        return value
+    elif hasattr(value, "to_dict"):
+        return value.to_dict()
+    else:
+        return value
 
 
 kube_backend = KubeReDeployer
