@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler
 from dfsync.backends import rsync_backend
 from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
+from dfsync.config import read_config
 
 logging.basicConfig(level=logging.WARN)
 
@@ -107,6 +108,19 @@ def split_destination(destination):
         return "rsync", destination
 
 
+def has_destination_optics(destination):
+    # Returns true if the given argument looks like a destination
+    # e.g. a kubernetes slug or a ssh "user@host:path" slug
+    is_kube = destination.lower().startswith("kube://")
+
+    is_ssh = ":/" in destination or ":~" in destination
+    if ":" in destination:
+        user_host, _ = destination.split(":")[:2]
+        is_ssh = "@" in user_host or is_ssh
+
+    return is_kube or is_ssh
+
+
 @click.command()
 @click.argument("source", nargs=-1)
 @click.argument("destination", default="", nargs=1)
@@ -152,13 +166,23 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
     )
 
     paths = ["."] if len(source) == 0 else source
+    config = read_config(destination, *paths)
+
     destination_dir = destination
+    if len(source) == 0 and config.destination and not has_destination_optics(destination):
+        destination_dir = config.destination
+        paths = [destination]
+    paths = [*config.additional_sources, *paths]
 
     backend, destination_dir = split_destination(destination_dir)
     click.echo("Destination, {}: '{}'".format(backend, destination_dir))
 
     backend_options = dict(
-        destination_dir=destination_dir, supervisor=supervisor, kube_host=kube_host, pod_timeout=pod_timeout
+        destination_dir=destination_dir,
+        supervisor=supervisor,
+        kube_host=kube_host,
+        pod_timeout=pod_timeout,
+        container_command=config.container_command,
     )
     backend_engine_factory = BACKENDS.get(backend)
     backend_engine = backend_engine_factory(**backend_options)

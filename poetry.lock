@@ -525,6 +525,11 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+<<<<<<< HEAD
+=======
+category = "main"
+description = "Python Library for Tom's Obvious, Minimal Language"
+>>>>>>> a39b3516e86d47cece46a10f8f35428a5e5edb0a
 name = "toml"
 version = "0.10.2"
 description = "Python Library for Tom's Obvious, Minimal Language"
@@ -610,7 +615,12 @@ docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "pytest-enabler", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
 
 [metadata]
+<<<<<<< HEAD
 lock-version = "1.1"
+=======
+content-hash = "d7c31ed11be7e0a637f5c20c6305b3e862f5afb0fa2f6a63a951ea05c9b3af46"
+lock-version = "1.0"
+>>>>>>> a39b3516e86d47cece46a10f8f35428a5e5edb0a
 python-versions = "^3.6"
 content-hash = "c216706398994a02cbbd1805c6e477715a1c7baceafd20dc6b80febc4fde17e0"
 
