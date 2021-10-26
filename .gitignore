@@ -1,5 +1,6 @@
 # ignore all hiden files
 .*
+.venv
 
 # ignore python bytecode files
 *.pyc

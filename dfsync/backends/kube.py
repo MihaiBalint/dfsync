@@ -247,7 +247,7 @@ class KubeReDeployer:
 
     def _set_deployment_command(self, pod, spec, status, command):
         # image_pull_policy="IfNotPresent",
-        # resources={"limits": {"memory": "6Gi", "cpu": "5000m"}, "requests": {"memory": "6Mi", "cpu": "5m"}},
+        # resources = {"limits": {"memory": "6Gi", "cpu": "5000m"}, "requests": {"memory": "6Mi", "cpu": "5m"}}
 
         return self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
 
@@ -265,14 +265,14 @@ class KubeReDeployer:
             if is_undo:
                 kwargs = self._get_dfsync_annotation(deployment) or {}
             else:
-                self._set_dfsync_annotation(deployment, as_json(container_spec, kwargs.keys()))
+                self._set_dfsync_annotation(deployment, marshall_dfsync_annotation(container_spec, kwargs.keys()))
 
             for k, v in kwargs.items():
                 if is_undo and k == "command" and self._is_dfsync_command(v):
                     print("Clearing dfsync metadata annotations")
                     container_spec.image_pull_policy = DEFAULT_PULL_POLICY
                     container_spec.command = DEFAULT_COMMAND
-                elif k == "command":
+                elif k in ["command"]:
                     # Yeah, None seems to be a special value that does not work as well as the empty list
                     container_spec.command = v or []
                 elif k == "resources":
@@ -604,15 +604,21 @@ class KubeReDeployer:
         self.status(image_base)
 
 
-def as_json(spec, keys):
-    result = {}
-    for k in keys:
-        if k == "resources":
-            resources = {"limits": spec.resources.limits, "requests": spec.resources.requests}
-            result[k] = resources
-        else:
-            result[k] = getattr(spec, k)
-    return result
+def marshall_dfsync_annotation(container_spec, property_keys):
+    return {k: marshall_spec_property(container_spec, k) for k in property_keys}
+
+
+def marshall_spec_property(container_spec, key):
+    value = getattr(container_spec, key)
+
+    if value is None or isinstance(value, (str, list)):
+        return value
+    elif hasattr(value, "to_dict"):
+        return value.to_dict()
+    elif k == "resources":
+        return {"limits": value.limits, "requests": value.requests}
+    else:
+        return value
 
 
 kube_backend = KubeReDeployer
