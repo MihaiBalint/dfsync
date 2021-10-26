@@ -4,6 +4,8 @@ import os.path
 import sys
 import time
 import logging
+
+from functools import partial
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -11,6 +13,7 @@ from dfsync.backends import rsync_backend
 from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
 from dfsync.config import read_config
+from dfsync.char_ui import KeyController
 
 logging.basicConfig(level=logging.WARN)
 
@@ -195,21 +198,41 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
         event_handler = FileChangedEventHandler(backend_engine, watched_dir=p, **backend_options)
         handlers.append(event_handler)
         observer.schedule(event_handler, os.path.abspath(p), recursive=True)
+
+    controller = KeyController()
+    controller.on_key(
+        "f",
+        description="to trigger a full sync",
+        action=partial(backend_engine.sync_project, paths, **backend_options),
+    )
+    controller.on_key(
+        "x",
+        description="to exit",
+        action=partial(controller.stop, "Exiting."),
+    )
+
     try:
         backend_engine.on_monitor_start(src_file_paths=paths, **backend_options)
         click.echo("Watching dir(s): '{}'; press [Ctrl-C] to exit\n".format("', '".join(paths)))
         observer.start()
 
+        controller.help()
+        controller.start()
+
         no_errors = True
-        while no_errors:
+        while no_errors and controller.is_running:
+            time.sleep(0.2)
             for event_handler in handlers:
                 if event_handler.raised_exception:
                     no_errors = False
                     break
-            time.sleep(0.2)
+            controller.raise_exceptions()
+
     except KeyboardInterrupt:
         click.echo("Received [Ctrl-C], exiting.")
+
     finally:
+        controller.stop()
         observer.stop()
         backend_engine.on_monitor_exit(**backend_options)
         observer.join()
