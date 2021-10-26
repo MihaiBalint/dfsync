@@ -247,6 +247,8 @@ class KubeReDeployer:
 
     def _set_deployment_command(self, pod, spec, status, command):
         # image_pull_policy="IfNotPresent",
+        # resources = {"limits": {"memory": "6Gi", "cpu": "5000m"}, "requests": {"memory": "6Mi", "cpu": "5m"}}
+
         return self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
 
     def _reset_deployment_command(self, pod, spec, status):
@@ -273,6 +275,11 @@ class KubeReDeployer:
                 elif k in ["command"]:
                     # Yeah, None seems to be a special value that does not work as well as the empty list
                     container_spec.command = v or []
+                elif k == "resources":
+                    existing_limits = container_spec.resources.limits or {}
+                    container_spec.resources.limits = {**existing_limits, **v.get("limits", {})}
+                    existing_requests = container_spec.resources.requests or {}
+                    container_spec.resources.requests = {**existing_requests, **v.get("requests", {})}
                 else:
                     setattr(container_spec, k, v)
 
@@ -587,6 +594,9 @@ class KubeReDeployer:
             GIT_FILTER.load_ignored_files(p)
         self.sync(src_file_paths, destination_dir, **kwargs)
 
+    def sync_project(self, src_file_paths, **kwargs):
+        self.sync(src_file_paths, **kwargs)
+
     def on_monitor_exit(self, destination_dir: str = None, supervisor: bool = True, **kwargs):
         image_base, _ = self.split_destination(destination_dir)
         if supervisor:
@@ -605,6 +615,8 @@ def marshall_spec_property(container_spec, key):
         return value
     elif hasattr(value, "to_dict"):
         return value.to_dict()
+    elif k == "resources":
+        return {"limits": value.limits, "requests": value.requests}
     else:
         return value
 
