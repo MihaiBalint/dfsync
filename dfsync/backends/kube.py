@@ -6,6 +6,8 @@ import json
 from urllib.parse import urlparse
 from kubernetes import client, config, watch
 from kubernetes.stream import stream
+from kubernetes.client.exceptions import ApiException
+from tenacity import retry, retry_if_exception_type, wait_exponential, stop_after_attempt
 
 from dfsync.filters import GIT_FILTER
 from .rsync import rsync_backend
@@ -224,7 +226,8 @@ class KubeReDeployer:
             return
 
         command = self._image_distro.get_supervise_command(self.container_command)
-        deployments = self._set_deployment_command(pod, spec, status, command)
+        deployments = self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
+
         print("Supervisor installing on {}".format(" ".join(deployments)))
 
     def supervisor_uninstall(self, pod, spec, status):
@@ -245,15 +248,15 @@ class KubeReDeployer:
         annotations_str = deployment.metadata.annotations.get(anno_key, "{}")
         return json.loads(annotations_str)
 
-    def _set_deployment_command(self, pod, spec, status, command):
-        # image_pull_policy="IfNotPresent",
-        # resources = {"limits": {"memory": "6Gi", "cpu": "5000m"}, "requests": {"memory": "6Mi", "cpu": "5m"}}
-
-        return self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
-
     def _reset_deployment_command(self, pod, spec, status):
         return self._edit_deployment(pod, spec, status)
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(ApiException),
+        reraise=True,
+    )
     def _edit_deployment(self, pod, spec, status, **kwargs):
         namespace = pod.metadata.namespace
         deployments = {}
@@ -263,7 +266,7 @@ class KubeReDeployer:
                 continue
 
             if is_undo:
-                kwargs = self._get_dfsync_annotation(deployment) or {}
+                kwargs = self._get_dfsync_annotation(deployment) or {"command": None}
             else:
                 self._set_dfsync_annotation(deployment, marshall_dfsync_annotation(container_spec, kwargs.keys()))
 
@@ -272,6 +275,8 @@ class KubeReDeployer:
                     print("Clearing dfsync metadata annotations")
                     container_spec.image_pull_policy = DEFAULT_PULL_POLICY
                     container_spec.command = DEFAULT_COMMAND
+                    container_spec.resources.limits = {}
+                    container_spec.resources.requests = {}
                 elif k in ["command"]:
                     # Yeah, None seems to be a special value that does not work as well as the empty list
                     container_spec.command = v or []
@@ -326,16 +331,20 @@ class KubeReDeployer:
         ready_map = {False: "🔴  ", True: "🟢  ", "dev": "🟠  "}
         # print("Pods using image: {}".format(image_base))
         for pod, spec, status in self.generate_matching_containers(image_base):
-            icon = ready_map[status.ready]
-            status_msg = status.ready
-            if not status.ready and status.state.waiting:
-                status_msg = "{} - {}".format(status.ready, status.state.waiting.reason)
-            elif not status.ready and status.last_state.waiting:
-                status_msg = "{} - {}".format(status.ready, status.last_state.waiting.reason)
-            elif status.ready and self._is_supervised(pod, spec, status):
+            waiting = None
+            is_ready = False
+            if status:
+                waiting = status.state.waiting or status.last_state.waiting
+                is_ready = status.ready
+
+            icon = ready_map[is_ready]
+            status_msg = is_ready
+            if not is_ready and waiting:
+                status_msg = "{} - {}".format(is_ready, waiting.reason)
+            elif is_ready and self._is_supervised(pod, spec, status):
                 icon = ready_map["dev"]
                 status_msg = "supervisor is running"
-            elif status.ready and self._is_uncrashed(pod, spec, status):
+            elif is_ready and self._is_uncrashed(pod, spec, status):
                 icon = ready_map["dev"]
                 status_msg = "still sleeping, having recovered from crashed state"
 
@@ -389,11 +398,10 @@ class KubeReDeployer:
 
         for pod in result.items:
             for spec, status in self.list_containers(pod):
-                if not status:
-                    continue
-
-                parsed = urlparse(status.image_id)
-                pod_images = [status.image, f"{parsed.netloc}{parsed.path}"]
+                pod_images = [spec.image]
+                if status:
+                    parsed = urlparse(status.image_id)
+                    pod_images = [*pod_images, status.image, f"{parsed.netloc}{parsed.path}"]
 
                 if not any(i.startswith(image_base) for i in pod_images):
                     continue
@@ -452,6 +460,9 @@ class KubeReDeployer:
             self.rsync_backend_instance.sync(src_file, **rsync_args)
 
     def _exec(self, pod, spec, status, command: list):
+        if not status:
+            raise ValueError(f"Pod {spec.name} does not have a container")
+
         return stream(
             self.api.connect_get_namespaced_pod_exec,
             pod.metadata.name,
@@ -465,13 +476,21 @@ class KubeReDeployer:
         )
 
     def _uncrash(self, pod, spec, status):
-        if status.ready:
+        if status and status.ready:
             return
-        if not status.state.waiting and not status.state.terminated:
+        if status and not status.state.waiting and not status.state.terminated:
             return
 
         print("Pod {}, is crashing, attempting deployment recovery".format(pod.metadata.name))
-        deployments = self._set_deployment_command(pod, spec, status, command=Generic.get_uncrash_command())
+        resources = {"limits": {"memory": "16Gi", "cpu": "5000m"}, "requests": {"memory": "1Mi", "cpu": "1m"}}
+        deployments = self._edit_deployment(
+            pod,
+            spec,
+            status,
+            command=Generic.get_uncrash_command(),
+            image_pull_policy="IfNotPresent",
+            resources=resources,
+        )
 
         please_wait()
         w = watch.Watch()
@@ -554,7 +573,7 @@ class KubeReDeployer:
             pods[pod.metadata.name] = pod
 
         if not len(pods):
-            print("None of the deployment containers match the given image")
+            print(f"None of the deployment containers match the given image ({image_base})")
             return
 
         please_wait()
