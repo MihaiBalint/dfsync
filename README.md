@@ -85,7 +85,7 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
    ```
 ---
 ### 👀 Command-line Reference
-```bash
+```
 $ dfsync --help
 Usage: dfsync [OPTIONS] [SOURCE]... [DESTINATION]
 
