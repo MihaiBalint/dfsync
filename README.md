@@ -17,14 +17,14 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
 
 - Requirements
     - Python Version
-        ```bash
-        $ python --version
-        Python 3.6  # At least version 3.6 or above.
-        ```
+      ```bash
+      $ python --version
+      Python 3.6  # At least version 3.6 or above.
+      ```
     - Install using pip package manager
-  ````bash
-  $ pip install dfsync
-  ````
+      ````bash
+      $ pip install dfsync
+      ````
 
 ### 🔨 Development
   
@@ -58,31 +58,31 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
 ##### Example Usages:
 1. Watch src directory and sync changes to a destination on the local file system.
    ```bash
-     $ dfsync [src] [destination]
-     # OR
-     $ dfsync [destination] # Current directory will be treated as [src]
+   $ dfsync [src] [destination]
+   # OR
+   $ dfsync [destination] # Current directory will be treated as [src]
    ```
-     ```bash
-        $ dfsync src /home/user/absolute/path/to/target/dir # sync src directory to destination.
-                Destination, rsync: '/home/user/Desktop/'
-                Watching dir(s): 'dist/'; press [Ctrl-C] to exit
-        $ dfsync . ../../relative/path/to/target/dir  # Sync current directory (.) into relatively mentioned path.
-                Destination, rsync: '../../Desktop/'
-                Watching dir(s): '.'; press [Ctrl-C] to exit
-        $ dfsync ../../relative/path/to/target/dir # if source directory is omitted, current directory is considered at src directory.
-     ```
+   ```bash
+   $ dfsync src /home/user/absolute/path/to/target/dir # sync src directory to destination.
+           Destination, rsync: '/home/user/Desktop/'
+           Watching dir(s): 'dist/'; press [Ctrl-C] to exit
+   $ dfsync . ../../relative/path/to/target/dir  # Sync current directory (.) into relatively mentioned path.
+           Destination, rsync: '../../Desktop/'
+           Watching dir(s): '.'; press [Ctrl-C] to exit
+   $ dfsync ../../relative/path/to/target/dir # if source directory is omitted, current directory is considered at src directory.
+   ```
 2. Watch [src] [dir] and sync changes to a remote target using ssh
    ```bash
-      $ dfsync src user@target-host:/home/user/absolute/paths/to/remote/host/dir # [src] to [dest] absolute directory.
-      # OR
-      $ dfsync build user@target-host:~/relative/path/to/user/home # [src=build] to [relative path]
+   $ dfsync src user@target-host:/home/user/absolute/paths/to/remote/host/dir # [src] to [dest] absolute directory.
+   # OR
+   $ dfsync build user@target-host:~/relative/path/to/user/home # [src=build] to [relative path]
    ```
 3. Watch a directory [src] and sync changes to kubernetes pod/containers using the given image name
    ```bash
-     $ dfsync src kube://image-name-of-awesome-api:/home/user/awesome-api # 
-      # OR
-     $ dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
-    ```
+   $ dfsync src kube://image-name-of-awesome-api:/home/user/awesome-api # 
+   # OR
+   $ dfsync kube://quay.io/project/name-of-container-image:/home/path/within/container/awesome-api
+   ```
 ---
 ### 👀 Command-line Reference
 ```bash
