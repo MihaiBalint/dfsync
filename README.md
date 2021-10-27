@@ -1,5 +1,15 @@
 ### 🔄 dfsync
-##### An Intelligent remote directories and files synchronization Tool.
+##### A tool to intelligently synchronize files and direcotries to remote machines.
+
+dfsync watches local files and folders for changes and copies those changes to a remote machine. This is super useful for software development when you have to edit on one machine but must run the code on a second machine (likely on some specialized hardware).
+
+##### Usage scenarios
+
+Say you have some sensors attached to a Raspberry PI board, dfsync copies the python code you are editing on your developer machine (a laptop) to the Raspberry PI. It monitors your source folder for changes and every time you save a file, it syncs that file to the Raspberry PI, quickly and automatically.
+
+What if you are developing apps targeting deployment in a kubernetes cluster? Every time you change a file, dfsync copies that source code file into the container. Sure you could use use [port-forwarding](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/) or [some of the other development tools](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/) or you could use dfsync a light-weight alternative, no server component, no priviledged DaemonSet required.
+
+So, you are doing AI/ML development and you have a big GPU/TPU server somewhere and you have to edit your code on one machine and run it on the big server, dfsync has you covered, every time you save a file, it automatically syncs that file to the big server. The code is in sync, now it's up to you to run it.
 
 ---
 
@@ -15,41 +25,33 @@
   ````bash
   $ pip install dfsync
   ````
-    - Build and install at your computer
-        - Make Sure **poetry** dependency management and built tool is install in your System.
-        - You can find the installation instruction and other information
-          about [poetry](https://python-poetry.org/docs/#osx--linux--bashonwindows-install-instructions) by clicking on
-          link.
-        - After Installation of **poetry** you can verify the version and help page
+
+### 🔨 Development
+  
+- Build and install dfsync on your computer
+    - Make Sure **poetry** dependency management and built tool is install in your System.
+    - You can find the installation instruction and other information
+      about [poetry](https://python-poetry.org/docs/#osx--linux--bashonwindows-install-instructions) by clicking on
+      link.
+    - After Installation of **poetry** verify that it's available
       ```bash
       $ poety --version
       Poetry version 1.1.11
-      $ poety --help
-      Poetry version 1.1.11
-  
-      USAGE
-      poetry [-h] [-q] [-v [<...>]] [-V] [--ansi] [--no-ansi] [-n] <command>
-           [<arg1>] ... [<argN>]
-  
-      ARGUMENTS
-      <command>              The command to execute
-      <arg>                  The arguments of the command
-      
-      <...line truncated>
       ```
-        - Clone the repository using command
-          ```bash
-            $ git clone https://github.com/MihaiBalint/dfsync.git
-            $ cd dfsync
-            $ poety install # install project dependencies
-            $ poety build   # build and generate arch neutral dfsync-<version>-py3-none-any.whl and an archive tar.gz file.
-          ```
-        - Now, Install it using _pip_ command.
-        - I am considering you have built it and your shell is active in dfsync directory
-        - Version might be different check, Verify generated file name before installation.
-          ```bash
-            $ pip install ./dist/dfsync-0.3.8-py3-none-any.whl
-          ```
+    - Clone the dfsync repository
+      ```bash
+      $ git clone https://github.com/MihaiBalint/dfsync.git
+      $ cd dfsync
+      $ poety install # install project dependencies
+      $ poetry shell
+      (.venv) $ dfsync --help  # Try running dfsync from the development venv that poerty created
+      (.venv) $ exit. # exit the dfsync development venv
+      $ poety build   # build and generate arch neutral dfsync-<version>-py3-none-any.whl and an archive tar.gz file.
+      ```
+    - If the build completed without errors and you are in the dfsync source dir, install the build on your system's python using _pip_ command
+      ```bash
+      $ pip install ./dist/dfsync-0.3.8-py3-none-any.whl   # Version might be different 
+      ```
 ---
         
 ### 📈 Command-line usages Example
@@ -125,3 +127,14 @@ Options:
 ```
 
 ---
+### 📄 Pyproject.toml configuration reference
+Instead of passing a large number of arguments from the command line, these can be added to a pyproject.toml file located in the source dir. See example below:
+
+```toml
+[tool.dfsync.configuration]
+destination = "kube://quay.io/project/app-image-prefix:/home/app-location"
+pod_timeout = 30
+additional_sources = ["../api-client-lib", "../domain-lib"]
+container_command = "./.venv/bin/uvicorn --host 0 --reload myproject:app"
+```
+
