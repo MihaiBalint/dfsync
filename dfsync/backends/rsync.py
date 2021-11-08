@@ -12,6 +12,10 @@ EVENT_TYPE_MAP = {
 }
 
 
+def echo(msg=""):
+    print(f"{msg}\r")
+
+
 class FileRsync:
     def __init__(self, **kwargs):
         pass
@@ -47,7 +51,7 @@ class FileRsync:
 
         if event_type == "deleted":
             if len(src_file_paths) > 1:
-                print("multi-source delete is not supported")
+                echo("multi-source delete is not supported")
             rsync_cmd = self._get_rsync_cmd_on_file_delete(src_file_paths[0], destination_dir, blocking_io, rsh)
         elif event_type == "full-sync":
             src_paths = [p or "./" for p in src_file_paths]
@@ -78,9 +82,9 @@ class FileRsync:
 
         event_type = EVENT_TYPE_MAP.get(event_type) or EVENT_TYPE_MAP.get("default")
         if len(src_file_paths) == 1:
-            print("{} {}".format(event_type, src_file_paths[0]))
+            echo("{} {}".format(event_type, src_file_paths[0]))
         else:
-            print("{} {}".format(event_type, src_file_paths))
+            echo("{} {}".format(event_type, src_file_paths))
 
     def _get_rsync_cmd_on_file_delete(self, src_file_path, destination_dir: str, blocking_io: list, rsh: list):
         src_dir, file_name = os.path.split(src_file_path)

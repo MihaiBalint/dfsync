@@ -16,6 +16,10 @@ def exclude_watchdog_directory_events(event=None, **kwargs):
 EMACS_PATTERNS = ["*~", "#*#", ".#*", ".goutputstream-*", "*_flymake.py"]
 
 
+def echo(msg):
+    print(f"{msg}\r")
+
+
 class LoggingFilter:
     def __init__(self):
         self.ignored_files = set()
@@ -29,7 +33,7 @@ class LoggingFilter:
         if len(reason):
             reason = ", {}".format(reason)
 
-        print("Ignored {}{}".format(src_file_path, reason))
+        echo("Ignored {}{}".format(src_file_path, reason))
 
     def _unignore(self, src_file_path: str):
         if src_file_path not in self.ignored_files:
@@ -93,7 +97,7 @@ class UntrackedGitFilesFilter(LoggingFilter):
                 repo = Repo(parent_path, search_parent_directories=True)
                 self._repos[repo.working_tree_dir] = repo
                 self._is_repo_initialized[repo.working_tree_dir] = True
-                print("Using git repo: {}".format(repo.working_tree_dir))
+                echo("Using git repo: {}".format(repo.working_tree_dir))
         except git.exc.InvalidGitRepositoryError:
             pass
         except ImportError:
