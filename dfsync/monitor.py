@@ -235,7 +235,9 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
         controller.stop()
         observer.stop()
         backend_engine.on_monitor_exit(**backend_options)
-        observer.join()
+        if observer.ident is not None:
+            # only join the observer if it was previously started
+            observer.join()
 
 
 if __name__ == "__main__":
