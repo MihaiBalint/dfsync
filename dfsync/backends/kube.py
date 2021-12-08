@@ -270,23 +270,25 @@ class KubeReDeployer:
             else:
                 self._set_dfsync_annotation(deployment, marshall_dfsync_annotation(container_spec, kwargs.keys()))
 
-            for k, v in kwargs.items():
-                if is_undo and k == "command" and self._is_dfsync_command(v):
+            for key, value in kwargs.items():
+                if is_undo and key == "command" and self._is_dfsync_command(value):
                     print("Clearing dfsync metadata annotations")
                     container_spec.image_pull_policy = DEFAULT_PULL_POLICY
                     container_spec.command = DEFAULT_COMMAND
                     container_spec.resources.limits = {}
                     container_spec.resources.requests = {}
-                elif k in ["command"]:
+                elif key in ["command"]:
                     # Yeah, None seems to be a special value that does not work as well as the empty list
-                    container_spec.command = v or []
-                elif k == "resources":
+                    container_spec.command = value or []
+                elif key == "resources":
                     existing_limits = container_spec.resources.limits or {}
-                    container_spec.resources.limits = {**existing_limits, **v.get("limits", {})}
+                    limits = value.get("limits", {}) or {}
+                    requests = value.get("requests", {}) or {}
+                    container_spec.resources.limits = {**existing_limits, **limits}
                     existing_requests = container_spec.resources.requests or {}
-                    container_spec.resources.requests = {**existing_requests, **v.get("requests", {})}
+                    container_spec.resources.requests = {**existing_requests, **requests}
                 else:
-                    setattr(container_spec, k, v)
+                    setattr(container_spec, key, value)
 
             deployments[deployment.metadata.uid] = deployment
 
