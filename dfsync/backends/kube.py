@@ -636,7 +636,7 @@ def marshall_spec_property(container_spec, key):
         return value
     elif hasattr(value, "to_dict"):
         return value.to_dict()
-    elif k == "resources":
+    elif key == "resources":
         return {"limits": value.limits, "requests": value.requests}
     else:
         return value
