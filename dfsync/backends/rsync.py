@@ -1,6 +1,4 @@
-import logging
-import os.path
-import subprocess
+import logging, os, os.path, subprocess
 
 from dfsync.filters import list_files_to_ignore
 
@@ -71,14 +69,22 @@ class FileRsync:
         popen_args = {}
         if rsync_cwd:
             popen_args.update(dict(cwd=rsync_cwd))
-        subprocess.check_call(
-            rsync_cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=rsh_env,
-            **popen_args,
-        )
+        try:
+            subprocess.check_call(
+                rsync_cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=rsh_env,
+                **popen_args,
+            )
+        except:
+            echo("Sync failed")
+            env_str = " ".join(f"{k}={v}" for k, v in rsh_env.items() if k not in os.environ.keys())
+            echo(f"Env Var: {env_str}")
+            cmd_str = " ".join(f"'{arg}'" if " " in arg else arg for arg in rsync_cmd)
+            echo(f"Command: {cmd_str}")
+            raise
 
         event_type = EVENT_TYPE_MAP.get(event_type) or EVENT_TYPE_MAP.get("default")
         if len(src_file_paths) == 1:
