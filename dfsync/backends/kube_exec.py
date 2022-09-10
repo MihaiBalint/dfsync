@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-import os
-import os.path
-import subprocess
-import sys
+import os, os.path, subprocess, sys, time
 
 from kubernetes import client, config
 
@@ -33,19 +30,29 @@ def main():
     if not pod_name:
         raise ValueError("Expecting pod name in 'KUBEEXEC_POD' env. variable")
 
+    kube_container = os.environ.get("KUBEEXEC_CONTAINER")
     kubectl_cmd = get_kubectl_exec_command(
         os.environ.get("KUBEEXEC_NAMESPACE"),
         pod_name,
-        os.environ.get("KUBEEXEC_CONTAINER"),
+        kube_container,
         os.environ.get("KUBEEXEC_KUBECONFIG"),
         os.environ.get("KUBEEXEC_CONTEXT"),
     )
 
-    container_cmd = get_container_command()
-    cmd = [*kubectl_cmd, *container_cmd]
-    subprocess.check_call(cmd)
-    # print("MIHAI\n\n", file=sys.stderr)
-    # print(subprocess.check_output(cmd), file=sys.stderr)
+    with open(f"dfsync-{kube_container}.log", "a") as f:
+        container_cmd = get_container_command()
+        cmd = [*kubectl_cmd, *container_cmd]
+        cmd_str = " ".join(cmd)
+        print(f"[{pod_name}] Running: {cmd_str}", file=f, flush=True)
+        try:
+            subprocess.check_call(cmd)
+
+        except Exception as e:
+            err = str(e) or type(e)
+            print(f"[{pod_name}] Error: {err}", file=f, flush=True)
+
+        finally:
+            print(f"[{pod_name}] Exiting", file=f, flush=True)
 
 
 if __name__ == "__main__":
