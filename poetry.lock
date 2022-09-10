@@ -1,7 +1,7 @@
 [[package]]
 category = "dev"
 description = "Disable App Nap on macOS >= 10.9"
-marker = "python_version == \"3.6\" and sys_platform == \"darwin\" or python_version >= \"3.7\" and sys_platform == \"darwin\""
+marker = "python_version > \"3.6\" and sys_platform == \"darwin\" or sys_platform == \"darwin\""
 name = "appnope"
 optional = false
 python-versions = "*"
@@ -32,19 +32,10 @@ tests_no_zope = ["cloudpickle", "pytest-mypy-plugins", "mypy (>=0.900,<0.940 || 
 [[package]]
 category = "dev"
 description = "Specifications for callback functions passed in to an API"
-marker = "python_version == \"3.6\" or python_version >= \"3.7\""
 name = "backcall"
 optional = false
 python-versions = "*"
 version = "0.2.0"
-
-[[package]]
-category = "main"
-description = "Extensible memoizing collections and decorators"
-name = "cachetools"
-optional = false
-python-versions = "~=3.5"
-version = "4.2.4"
 
 [[package]]
 category = "main"
@@ -61,18 +52,6 @@ name = "certifi"
 optional = false
 python-versions = ">=3.6"
 version = "2022.6.15.1"
-
-[[package]]
-category = "main"
-description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
-marker = "python_version >= \"3\""
-name = "charset-normalizer"
-optional = false
-python-versions = ">=3.5.0"
-version = "2.0.12"
-
-[package.extras]
-unicode_backport = ["unicodedata2"]
 
 [[package]]
 category = "main"
@@ -96,7 +75,7 @@ version = "7.1.2"
 [[package]]
 category = "dev"
 description = "Cross-platform colored terminal text."
-marker = "python_version == \"3.6\" and sys_platform == \"win32\" or sys_platform == \"win32\" or python_version >= \"3.7\" and sys_platform == \"win32\""
+marker = "python_version > \"3.6\" and sys_platform == \"win32\" or sys_platform == \"win32\""
 name = "colorama"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
@@ -105,7 +84,6 @@ version = "0.4.5"
 [[package]]
 category = "dev"
 description = "Decorators for Humans"
-marker = "python_version > \"3.6\" or python_version == \"3.6\""
 name = "decorator"
 optional = false
 python-versions = ">=3.5"
@@ -138,21 +116,6 @@ version = "4.0.9"
 
 [package.dependencies]
 smmap = ">=3.0.1,<6"
-
-[[package]]
-category = "main"
-description = "Python Git Library"
-name = "gitpython"
-optional = false
-python-versions = ">=3.6"
-version = "3.1.20"
-
-[package.dependencies]
-gitdb = ">=4.0.1,<5"
-
-[package.dependencies.typing-extensions]
-python = "<3.10"
-version = ">=3.7.4.3"
 
 [[package]]
 category = "main"
@@ -230,59 +193,22 @@ version = "0.13.9"
 
 [package.dependencies]
 setuptools = "*"
-[[package.dependencies.ipython]]
-python = ">=3.6,<3.7"
-version = ">=7.10.0,<7.17.0"
 
-[[package.dependencies.ipython]]
+[package.dependencies.decorator]
+python = ">=3.7"
+version = "*"
+
+[package.dependencies.ipython]
 python = ">=3.7"
 version = ">=7.17.0"
 
-[package.dependencies.decorator]
-python = ">=3.6,<3.7"
-version = "*"
-
 [package.dependencies.toml]
-python = ">=3.6,<3.7"
+python = ">=3.7"
 version = ">=0.10.2"
 
 [[package]]
 category = "dev"
 description = "IPython: Productive Interactive Computing"
-marker = "python_version == \"3.6\""
-name = "ipython"
-optional = false
-python-versions = ">=3.6"
-version = "7.16.3"
-
-[package.dependencies]
-appnope = "*"
-backcall = "*"
-colorama = "*"
-decorator = "*"
-jedi = ">=0.10,<=0.17.2"
-pexpect = "*"
-pickleshare = "*"
-prompt-toolkit = ">=2.0.0,<3.0.0 || >3.0.0,<3.0.1 || >3.0.1,<3.1.0"
-pygments = "*"
-setuptools = ">=18.5"
-traitlets = ">=4.2"
-
-[package.extras]
-all = ["Sphinx (>=1.3)", "ipykernel", "ipyparallel", "ipywidgets", "nbconvert", "nbformat", "nose (>=0.10.1)", "notebook", "numpy (>=1.14)", "pygments", "qtconsole", "requests", "testpath"]
-doc = ["Sphinx (>=1.3)"]
-kernel = ["ipykernel"]
-nbconvert = ["nbconvert"]
-nbformat = ["nbformat"]
-notebook = ["notebook", "ipywidgets"]
-parallel = ["ipyparallel"]
-qtconsole = ["qtconsole"]
-test = ["nose (>=0.10.1)", "requests", "testpath", "pygments", "nbformat", "ipykernel", "numpy (>=1.14)"]
-
-[[package]]
-category = "dev"
-description = "IPython: Productive Interactive Computing"
-marker = "python_version > \"3.6\""
 name = "ipython"
 optional = false
 python-versions = ">=3.7"
@@ -315,33 +241,7 @@ test = ["nose (>=0.10.1)", "requests", "testpath", "pygments", "nbformat", "ipyk
 
 [[package]]
 category = "dev"
-description = "Vestigial utilities from IPython"
-marker = "python_version == \"3.6\""
-name = "ipython-genutils"
-optional = false
-python-versions = "*"
-version = "0.2.0"
-
-[[package]]
-category = "dev"
 description = "An autocompletion tool for Python that can be used for text editors."
-marker = "python_version == \"3.6\""
-name = "jedi"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "0.17.2"
-
-[package.dependencies]
-parso = ">=0.7.0,<0.8.0"
-
-[package.extras]
-qa = ["flake8 (3.7.9)"]
-testing = ["Django (<3.1)", "colorama", "docopt", "pytest (>=3.9.0,<5.0.0)"]
-
-[[package]]
-category = "dev"
-description = "An autocompletion tool for Python that can be used for text editors."
-marker = "python_version >= \"3.7\""
 name = "jedi"
 optional = false
 python-versions = ">=3.6"
@@ -380,7 +280,6 @@ adal = ["adal (>=1.0.2)"]
 [[package]]
 category = "dev"
 description = "Inline Matplotlib backend for Jupyter"
-marker = "python_version >= \"3.7\""
 name = "matplotlib-inline"
 optional = false
 python-versions = ">=3.5"
@@ -421,19 +320,6 @@ signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 [[package]]
 category = "dev"
 description = "A Python Parser"
-marker = "python_version == \"3.6\""
-name = "parso"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "0.7.1"
-
-[package.extras]
-testing = ["docopt", "pytest (>=3.0.7)"]
-
-[[package]]
-category = "dev"
-description = "A Python Parser"
-marker = "python_version >= \"3.7\""
 name = "parso"
 optional = false
 python-versions = ">=3.6"
@@ -446,7 +332,7 @@ testing = ["docopt", "pytest (<6.0.0)"]
 [[package]]
 category = "dev"
 description = "Pexpect allows easy control of interactive console applications."
-marker = "python_version == \"3.6\" and sys_platform != \"win32\" or python_version >= \"3.7\" and sys_platform != \"win32\""
+marker = "python_version > \"3.6\" and sys_platform != \"win32\" or sys_platform != \"win32\""
 name = "pexpect"
 optional = false
 python-versions = "*"
@@ -458,7 +344,6 @@ ptyprocess = ">=0.5"
 [[package]]
 category = "dev"
 description = "Tiny 'shelve'-like database with concurrency support"
-marker = "python_version == \"3.6\" or python_version >= \"3.7\""
 name = "pickleshare"
 optional = false
 python-versions = "*"
@@ -484,19 +369,6 @@ testing = ["pytest", "pytest-benchmark"]
 [[package]]
 category = "dev"
 description = "Library for building powerful interactive command lines in Python"
-marker = "python_version == \"3.6\""
-name = "prompt-toolkit"
-optional = false
-python-versions = ">=3.6"
-version = "3.0.3"
-
-[package.dependencies]
-wcwidth = "*"
-
-[[package]]
-category = "dev"
-description = "Library for building powerful interactive command lines in Python"
-marker = "python_version >= \"3.7\""
 name = "prompt-toolkit"
 optional = false
 python-versions = ">=3.6.2"
@@ -508,7 +380,7 @@ wcwidth = "*"
 [[package]]
 category = "dev"
 description = "Run a subprocess in a pseudo terminal"
-marker = "python_version == \"3.6\" and sys_platform != \"win32\" or python_version >= \"3.7\" and sys_platform != \"win32\""
+marker = "python_version > \"3.6\" and sys_platform != \"win32\" or sys_platform != \"win32\""
 name = "ptyprocess"
 optional = false
 python-versions = "*"
@@ -560,7 +432,6 @@ version = "2.4.0"
 [[package]]
 category = "dev"
 description = "Pygments is a syntax highlighting package written in Python."
-marker = "python_version == \"3.6\" or python_version >= \"3.7\""
 name = "pygments"
 optional = false
 python-versions = ">=3.6"
@@ -605,30 +476,6 @@ name = "pyyaml"
 optional = false
 python-versions = ">=3.6"
 version = "6.0"
-
-[[package]]
-category = "main"
-description = "Python HTTP for Humans."
-name = "requests"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
-version = "2.27.1"
-
-[package.dependencies]
-certifi = ">=2017.4.17"
-urllib3 = ">=1.21.1,<1.27"
-
-[package.dependencies.charset-normalizer]
-python = ">=3"
-version = ">=2.0.0,<2.1.0"
-
-[package.dependencies.idna]
-python = ">=3"
-version = ">=2.5,<4"
-
-[package.extras]
-socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7)", "win-inet-pton"]
-use_chardet_on_py3 = ["chardet (>=3.0.2,<5)"]
 
 [[package]]
 category = "main"
@@ -713,7 +560,6 @@ version = "0.10.2"
 [[package]]
 category = "dev"
 description = ""
-marker = "python_version >= \"3.7\""
 name = "traitlets"
 optional = false
 python-versions = ">=3.7"
@@ -721,32 +567,6 @@ version = "5.3.0"
 
 [package.extras]
 test = ["pytest", "pre-commit"]
-
-[[package]]
-category = "dev"
-description = "Traitlets Python config system"
-marker = "python_version == \"3.6\""
-name = "traitlets"
-optional = false
-python-versions = "*"
-version = "4.3.3"
-
-[package.dependencies]
-decorator = "*"
-ipython-genutils = "*"
-six = "*"
-
-[package.extras]
-test = ["pytest", "mock"]
-
-[[package]]
-category = "main"
-description = "Backported and Experimental Type Hints for Python 3.6+"
-marker = "python_version < \"3.10\""
-name = "typing-extensions"
-optional = false
-python-versions = ">=3.6"
-version = "4.1.1"
 
 [[package]]
 category = "main"
@@ -784,24 +604,10 @@ watchmedo = ["PyYAML (>=3.10)"]
 [[package]]
 category = "dev"
 description = "Measures the displayed width of unicode strings in a terminal"
-marker = "python_version == \"3.6\" or python_version >= \"3.7\""
 name = "wcwidth"
 optional = false
 python-versions = "*"
 version = "0.2.5"
-
-[[package]]
-category = "main"
-description = "WebSocket client for Python with low level API options"
-name = "websocket-client"
-optional = false
-python-versions = ">=3.6"
-version = "1.3.1"
-
-[package.extras]
-docs = ["sphinx-rtd-theme (>=0.5)", "Sphinx (>=3.4)"]
-optional = ["wsaccel", "python-socks"]
-test = ["websockets"]
 
 [[package]]
 category = "main"
@@ -822,19 +628,6 @@ description = "Backport of pathlib-compatible object wrapper for zip files"
 marker = "python_version < \"3.8\""
 name = "zipp"
 optional = false
-python-versions = ">=3.6"
-version = "3.6.0"
-
-[package.extras]
-docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
-testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.0.1)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
-
-[[package]]
-category = "dev"
-description = "Backport of pathlib-compatible object wrapper for zip files"
-marker = "python_version < \"3.8\""
-name = "zipp"
-optional = false
 python-versions = ">=3.7"
 version = "3.8.1"
 
@@ -843,9 +636,9 @@ docs = ["sphinx", "jaraco.packaging (>=9)", "rst.linker (>=1.9)", "jaraco.tideli
 testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.3)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy (>=0.9.1)"]
 
 [metadata]
-content-hash = "2cd506d2b8334381cd4632f9e40428aa1076117eea8dd3ebe21d5a9be45c0dfb"
+content-hash = "520a6eecfa967dd782977131ab3b7b81cf57708528ae3929c9617e953f8de144"
 lock-version = "1.0"
-python-versions = "^3.6"
+python-versions = "^3.7"
 
 [metadata.files]
 appnope = []
@@ -855,10 +648,7 @@ backcall = [
     {file = "backcall-0.2.0-py2.py3-none-any.whl", hash = "sha256:fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255"},
     {file = "backcall-0.2.0.tar.gz", hash = "sha256:5cbdbf27be5e7cfadb448baf0aa95508f91f2bbc6c6437cd9cd06e2a4c215e1e"},
 ]
-cachetools = [
-    {file = "cachetools-4.2.4-py3-none-any.whl", hash = "sha256:92971d3cb7d2a97efff7c7bb1657f21a8f5fb309a37530537c71b1774189f2d1"},
-    {file = "cachetools-4.2.4.tar.gz", hash = "sha256:89ea6f1b638d5a73a4f9226be57ac5e4f399d22770b92355f92dcb0f7f001693"},
-]
+cachetools = []
 certifi = []
 charset-normalizer = []
 click = [
@@ -875,10 +665,7 @@ gitdb = [
     {file = "gitdb-4.0.9-py3-none-any.whl", hash = "sha256:8033ad4e853066ba6ca92050b9df2f89301b8fc8bf7e9324d412a63f8bf1a8fd"},
     {file = "gitdb-4.0.9.tar.gz", hash = "sha256:bac2fd45c0a1c9cf619e63a90d62bdc63892ef92387424b855792a6cabe789aa"},
 ]
-gitpython = [
-    {file = "GitPython-3.1.20-py3-none-any.whl", hash = "sha256:b1e1c269deab1b08ce65403cf14e10d2ef1f6c89e33ea7c5e5bb0222ea593b8a"},
-    {file = "GitPython-3.1.20.tar.gz", hash = "sha256:df0e072a200703a65387b0cfdf0466e3bab729c0458cf6b7349d0e9877636519"},
-]
+gitpython = []
 google-auth = []
 idna = [
     {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
@@ -892,13 +679,7 @@ ipdb = [
     {file = "ipdb-0.13.9.tar.gz", hash = "sha256:951bd9a64731c444fd907a5ce268543020086a697f6be08f7cc2c9a752a278c5"},
 ]
 ipython = []
-ipython-genutils = [
-    {file = "ipython_genutils-0.2.0-py2.py3-none-any.whl", hash = "sha256:72dd37233799e619666c9f639a9da83c34013a73e8bbc79a7a6348d93c61fab8"},
-    {file = "ipython_genutils-0.2.0.tar.gz", hash = "sha256:eb2e116e75ecef9d4d228fdc66af54269afa26ab4463042e33785b887c628ba8"},
-]
 jedi = [
-    {file = "jedi-0.17.2-py2.py3-none-any.whl", hash = "sha256:98cc583fa0f2f8304968199b01b6b4b94f469a1f4a74c1560506ca2a211378b5"},
-    {file = "jedi-0.17.2.tar.gz", hash = "sha256:86ed7d9b750603e4ba582ea8edc678657fb4007894a12bcf6f4bb97892f31d20"},
     {file = "jedi-0.18.1-py2.py3-none-any.whl", hash = "sha256:637c9635fcf47945ceb91cd7f320234a7be540ded6f3e99a50cb6febdfd1ba8d"},
     {file = "jedi-0.18.1.tar.gz", hash = "sha256:74137626a64a99c8eb6ae5832d99b3bdd7d29a3850fe2aa80a4126b2a7d949ab"},
 ]
@@ -914,8 +695,6 @@ mccabe = [
 more-itertools = []
 oauthlib = []
 parso = [
-    {file = "parso-0.7.1-py2.py3-none-any.whl", hash = "sha256:97218d9159b2520ff45eb78028ba8b50d2bc61dcc062a9682666f2dc4bd331ea"},
-    {file = "parso-0.7.1.tar.gz", hash = "sha256:caba44724b994a8a5e086460bb212abc5a8bc46951bf4a9a1210745953622eb9"},
     {file = "parso-0.8.3-py2.py3-none-any.whl", hash = "sha256:c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75"},
     {file = "parso-0.8.3.tar.gz", hash = "sha256:8c07be290bb59f03588915921e29e8a50002acaf2cdc5fa0e0114f91709fafa0"},
 ]
@@ -931,10 +710,7 @@ pluggy = [
     {file = "pluggy-1.0.0-py2.py3-none-any.whl", hash = "sha256:74134bbf457f031a36d68416e1509f34bd5ccc019f0bcc952c7b909d06b37bd3"},
     {file = "pluggy-1.0.0.tar.gz", hash = "sha256:4224373bacce55f955a878bf9cfa763c1e360858e330072059e10bad68531159"},
 ]
-prompt-toolkit = [
-    {file = "prompt_toolkit-3.0.3-py3-none-any.whl", hash = "sha256:c93e53af97f630f12f5f62a3274e79527936ed466f038953dfa379d4941f651a"},
-    {file = "prompt_toolkit-3.0.3.tar.gz", hash = "sha256:a402e9bf468b63314e37460b68ba68243d55b2f8c4d0192f85a019af3945050e"},
-]
+prompt-toolkit = []
 ptyprocess = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
@@ -1044,10 +820,7 @@ toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
     {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
-traitlets = [
-    {file = "traitlets-4.3.3-py2.py3-none-any.whl", hash = "sha256:70b4c6a1d9019d7b4f6846832288f86998aa3b9207c6821f3578a6a6a467fe44"},
-    {file = "traitlets-4.3.3.tar.gz", hash = "sha256:d023ee369ddd2763310e4c3eae1ff649689440d4ae59d7485eb4cfbbe3e359f7"},
-]
+traitlets = []
 typing-extensions = []
 urllib3 = []
 watchdog = []
@@ -1056,7 +829,4 @@ wcwidth = [
     {file = "wcwidth-0.2.5.tar.gz", hash = "sha256:c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83"},
 ]
 websocket-client = []
-zipp = [
-    {file = "zipp-3.6.0-py3-none-any.whl", hash = "sha256:9fe5ea21568a0a70e50f273397638d39b03353731e6cbbb3fd8502a33fec40bc"},
-    {file = "zipp-3.6.0.tar.gz", hash = "sha256:71c644c5369f4a6e07636f0aa966270449561fcea2e3d6747b8d23efaa9d7832"},
-]
+zipp = []
