@@ -36,21 +36,21 @@ class Alpine:
 
     @classmethod
     def check_rsync(cls):
-        return ["rsync", "--version"]
+        return ["/bin/sh", "-c", "rsync --version"]
 
     @classmethod
     def check_package_manager(cls):
-        return ["apk", "--version"]
+        return ["/bin/sh", "-c", "apk --version"]
 
     @classmethod
     def check_can_exec(cls):
         return ["true"]
 
 
-class CentOS:
+class ELinuxOS:
     @classmethod
     def name(cls):
-        return "CentOS linux (or dnf-based CentOS clone)"
+        return "Enterprise Linux (or rpm/dnf-based Enterprise Linux clone)"
 
     @classmethod
     def get_supervise_command(cls, container_command):
@@ -67,11 +67,11 @@ class CentOS:
 
     @classmethod
     def check_rsync(cls):
-        return ["rsync", "--version"]
+        return ["/bin/sh", "-c", "rsync --version"]
 
     @classmethod
     def check_package_manager(cls):
-        return ["dnf", "--version"]
+        return ["/bin/sh", "-c", "dnf --version"]
 
     @classmethod
     def check_can_exec(cls):
@@ -98,11 +98,11 @@ class Ubuntu:
 
     @classmethod
     def check_rsync(cls):
-        return ["rsync", "--version"]
+        return ["/bin/sh", "-c", "rsync --version"]
 
     @classmethod
     def check_package_manager(cls):
-        return ["apt", "--version"]
+        return ["/bin/sh", "-c", "apt --version"]
 
     @classmethod
     def check_can_exec(cls):
@@ -282,9 +282,12 @@ class KubeReDeployer:
                     container_spec.command = v or []
                 elif k == "resources":
                     existing_limits = container_spec.resources.limits or {}
-                    container_spec.resources.limits = {**existing_limits, **v.get("limits", {})}
+                    new_limits = v.get("limits") or {}
+                    container_spec.resources.limits = {**existing_limits, **new_limits}
+
                     existing_requests = container_spec.resources.requests or {}
-                    container_spec.resources.requests = {**existing_requests, **v.get("requests", {})}
+                    new_requests = v.get("requests") or {}
+                    container_spec.resources.requests = {**existing_requests, **new_requests}
                 else:
                     setattr(container_spec, k, v)
 
@@ -517,14 +520,14 @@ class KubeReDeployer:
             self._uncrash(pod, spec, status)
 
     def _sniff_image_distro(self, pod, spec, status):
-        for distro in [Alpine, CentOS, Ubuntu]:
+        for distro in [Alpine, ELinuxOS, Ubuntu]:
             try:
                 resp = self._exec(pod, spec, status, distro.check_package_manager())
-                if resp and "runtime exec failed" in resp:
+                if resp and "command not found" in resp:
                     continue
 
                 return distro
-            except:
+            except Exception as e:
                 pass
 
         print("Failed to detect container image OS variant. Assuming bash, rsync and supervisor are already installed")
@@ -533,12 +536,11 @@ class KubeReDeployer:
     def dry_run_exec(self, pod, spec, status):
         try:
             resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
-            if resp and "runtime exec failed" in resp:
+            if resp and "command not found" in resp:
                 resp = self._exec(pod, spec, status, self._image_distro.install_rsync())
-
-            resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
-            if resp and "runtime exec failed" in resp:
-                return False
+                resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
+                if resp and "command not found" in resp:
+                    return False
 
             return len(resp) > 0
         except:
@@ -634,7 +636,7 @@ def marshall_spec_property(container_spec, key):
         return value
     elif hasattr(value, "to_dict"):
         return value.to_dict()
-    elif k == "resources":
+    elif key == "resources":
         return {"limits": value.limits, "requests": value.requests}
     else:
         return value
