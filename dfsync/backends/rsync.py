@@ -40,6 +40,10 @@ class FileRsync:
         rsync_cwd=None,
         **kwargs,
     ):
+        event_type_str = EVENT_TYPE_MAP.get(event_type) or EVENT_TYPE_MAP.get("default")
+        if event_type == "full-sync":
+            echo(f"{event_type_str} running")
+
         rsh = ["--rsh={}".format(rsh)] if rsh is not None else []
         blocking_io = ["--blocking-io"] if blocking_io else []
 
@@ -86,11 +90,10 @@ class FileRsync:
             echo(f"Command: {cmd_str}")
             raise
 
-        event_type = EVENT_TYPE_MAP.get(event_type) or EVENT_TYPE_MAP.get("default")
         if len(src_file_paths) == 1:
-            echo("{} {}".format(event_type, src_file_paths[0]))
+            echo("{} {}".format(event_type_str, src_file_paths[0]))
         else:
-            echo("{} {}".format(event_type, src_file_paths))
+            echo("{} {}".format(event_type_str, src_file_paths))
 
     def _get_rsync_cmd_on_file_delete(self, src_file_path, destination_dir: str, blocking_io: list, rsh: list):
         src_dir, file_name = os.path.split(src_file_path)
