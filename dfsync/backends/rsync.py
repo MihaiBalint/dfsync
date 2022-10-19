@@ -84,7 +84,9 @@ class FileRsync:
             )
         except:
             echo("Sync failed")
-            env_str = " ".join(f"{k}={v}" for k, v in rsh_env.items() if k not in os.environ.keys())
+            env_str = "N/A"
+            if rsh_env:
+                env_str = " ".join(f"{k}={v}" for k, v in rsh_env.items() if k not in os.environ.keys())
             echo(f"Env Var: {env_str}")
             cmd_str = " ".join(f"'{arg}'" if " " in arg else arg for arg in rsync_cmd)
             echo(f"Command: {cmd_str}")
