@@ -215,14 +215,17 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
     if backend_engine is None:
         raise ValueError("Backend not found: {}".format(backend))
 
+    controller = KeyController()
+
     handlers = []
     observer = Observer()
     for p in paths:
-        event_handler = FileChangedEventHandler(backend_engine, watched_dir=p, **backend_options)
+        event_handler = FileChangedEventHandler(
+            backend_engine, watched_dir=p, input_controller=controller, **backend_options
+        )
         handlers.append(event_handler)
         observer.schedule(event_handler, os.path.abspath(p), recursive=True)
 
-    controller = KeyController()
     controller.on_key(
         "f",
         description="to trigger a full sync",

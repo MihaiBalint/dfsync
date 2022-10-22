@@ -23,19 +23,20 @@ class _GetchUnix:
                     break
                 try:
                     tty.setraw(sys.stdin.fileno())
-                    events = sel.select(timeout=0.2)
+                    events = sel.select(timeout=0.1)
                     if events:
                         key, _ = events[0]
                         ch = key.fileobj.read(1)
                 finally:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            time.sleep(0.001)
         return ch
 
     def stop(self):
         self.capture = False
         with self.raw_lock:
             # This is here to make sure that the tty state is normal (not raw)
-            pass
+            self.capture = False
 
 
 getch = None
@@ -84,6 +85,7 @@ class KeyController:
             self.echo(message)
         self._running = False
 
+    @contextmanager
     def getch_lock(self):
         with getch.raw_lock:
             yield self
