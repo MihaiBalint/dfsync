@@ -116,6 +116,17 @@ def split_destination(destination):
         return "rsync", destination
 
 
+def filter_missing_paths(paths: list):
+    missing_paths = []
+    existing_paths = []
+    for p in paths:
+        if os.path.exists(p):
+            existing_paths.append(p)
+        else:
+            missing_paths.append(p)
+    return missing_paths, existing_paths
+
+
 def has_destination_optics(destination):
     # Returns true if the given argument looks like a destination
     # e.g. a kubernetes slug or a ssh "user@host:path" slug
@@ -180,7 +191,14 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
     if len(source) == 0 and config.destination and not has_destination_optics(destination):
         destination_dir = config.destination
         paths = [destination]
-    paths = [*config.additional_sources, *paths]
+    missing, paths = filter_missing_paths([*config.additional_sources, *paths])
+    if len(missing) > 0:
+        click.echo(f"Source file/dirs not found: {', '.join(missing)}")
+
+    if len(paths) == 0:
+        raise ValueError("No source file/dirs found")
+    elif len(missing) > 0:
+        click.echo(f"Using source file/dirs {', '.join(paths)}")
 
     backend, destination_dir = split_destination(destination_dir)
     click.echo("Destination, {}: '{}'".format(backend, destination_dir))
