@@ -17,7 +17,7 @@ EMACS_PATTERNS = ["*~", "#*#", ".#*", ".goutputstream-*", "*_flymake.py"]
 
 
 def echo(msg):
-    print(f"{msg}\r")
+    print(f"{msg}")
 
 
 class LoggingFilter:

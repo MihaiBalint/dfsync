@@ -11,7 +11,7 @@ EVENT_TYPE_MAP = {
 
 
 def echo(msg=""):
-    print(f"{msg}\r")
+    print(f"{msg}")
 
 
 class FileRsync:

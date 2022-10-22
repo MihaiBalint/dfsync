@@ -1,28 +1,51 @@
 import time, threading
 from functools import partial
 from collections import namedtuple
+from contextlib import contextmanager
 
 
 class _GetchUnix:
+    def __init__(self):
+        self.capture = True
+        self.raw_lock = threading.Lock()
+
     def __call__(self):
-        import sys, tty, termios
+        import sys, tty, termios, selectors
 
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(sys.stdin.fileno())
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        sel = selectors.DefaultSelector()
+        sel.register(sys.stdin, selectors.EVENT_READ)
+        ch = None
+        while ch is None and self.capture:
+            with self.raw_lock:
+                if not self.capture:
+                    break
+                try:
+                    tty.setraw(sys.stdin.fileno())
+                    events = sel.select(timeout=0.2)
+                    if events:
+                        key, _ = events[0]
+                        ch = key.fileobj.read(1)
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+
+    def stop(self):
+        self.capture = False
+        with self.raw_lock:
+            # This is here to make sure that the tty state is normal (not raw)
+            pass
 
 
 getch = None
+
 try:
     import msvcrt
 
     # MS Windows
     getch = msvcrt.getch()
+    raise RuntimeError("Windows isn't supported")
 
 except ImportError:
     getch = _GetchUnix()
@@ -56,13 +79,20 @@ class KeyController:
         self._thread.start()
 
     def stop(self, message: str = None):
+        getch.stop()
         if message:
             self.echo(message)
         self._running = False
 
+    def getch_lock(self):
+        with getch.raw_lock:
+            yield self
+
     def run(self):
         while self._running:
             k = getch()
+            if k is None:
+                continue
             handler = self.key_handlers.get(k)
             try:
                 if handler is not None:

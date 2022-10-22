@@ -29,13 +29,14 @@ class IgnoreEvent(Exception):
 
 
 class FileChangedEventHandler(FileSystemEventHandler):
-    def __init__(self, backend: str = "log", watched_dir: str = ".", **kwargs):
+    def __init__(self, backend: str = "log", watched_dir: str = ".", input_controller: KeyController = None, **kwargs):
         self.filters = [*ALL_FILTERS]
 
         self.backend = backend
         self.backend_options = kwargs
         self.raised_exception = False
         self.abs_watched_dir = os.path.abspath(watched_dir)
+        self.input_controller = input_controller
 
     def _log_backend(self, event):
         logging.info(event)
@@ -83,7 +84,11 @@ class FileChangedEventHandler(FileSystemEventHandler):
 
     def catch_all_handler(self, event):
         try:
-            self._propagate_event(event)
+            if self.input_controller is None:
+                self._propagate_event(event)
+            else:
+                with self.input_controller.getch_lock():
+                    self._propagate_event(event)
         except IgnoreEvent:
             pass
         except:
@@ -229,10 +234,14 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
             controller.raise_exceptions()
 
     except KeyboardInterrupt:
+        controller.stop()
         click.echo("Received [Ctrl-C], exiting.")
 
-    finally:
+    except:
         controller.stop()
+        raise
+
+    finally:
         observer.stop()
         backend_engine.on_monitor_exit(**backend_options)
         if observer.ident is not None:
