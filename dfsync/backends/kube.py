@@ -206,7 +206,7 @@ def get_selected_kubernetes(kube_host=None):
 
 
 class KubeReDeployer:
-    def __init__(self, kube_host=None, pod_timeout=30, container_command=None, **kwargs):
+    def __init__(self, kube_host=None, pod_timeout=30, container_command=None, full_sync=True, **kwargs):
         config.load_kube_config()
 
         selected_context, selected_context_api = get_selected_kubernetes(kube_host)
@@ -220,6 +220,7 @@ class KubeReDeployer:
         self._image_distro = None
         self.pod_timeout = pod_timeout
         self.container_command = container_command
+        self._full_sync = full_sync
 
     def supervisor_install(self, pod, spec, status):
         if self._is_supervised(pod, spec, status):
@@ -443,9 +444,13 @@ class KubeReDeployer:
                 print("{} failed to rsync into {}".format(src_file_path, pod.metadata.name))
                 continue
 
-            container_dir = self.get_container_destination_dir(pod, status, destination_dir)
-            rsh_command, rsh_env = self.get_exec_command(pod.metadata.namespace, pod.metadata.name, status.name)
-            self.sync_files(rsh_command, src_file_path, container_dir, rsh_env=rsh_env, **kwargs)
+            if self._full_sync is not False:
+                container_dir = self.get_container_destination_dir(pod, status, destination_dir)
+                rsh_command, rsh_env = self.get_exec_command(pod.metadata.namespace, pod.metadata.name, status.name)
+                self.sync_files(rsh_command, src_file_path, container_dir, rsh_env=rsh_env, **kwargs)
+            else:
+                self._full_sync = None
+                print("Full Sync skipped")
 
     def sync_files(self, rsh_command, src_file, destination_dir: str = None, **kwargs):
         rsh_destination = ":{}".format(destination_dir)

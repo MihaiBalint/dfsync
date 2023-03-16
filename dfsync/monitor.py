@@ -5,6 +5,7 @@ import sys
 import time
 import logging
 
+from click_default_group import DefaultGroup
 from functools import partial
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -14,6 +15,7 @@ from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
+from dfsync.kube_credentials import read_kube_credentials
 
 logging.basicConfig(level=logging.WARN)
 
@@ -140,13 +142,29 @@ def has_destination_optics(destination):
     return is_kube or is_ssh
 
 
-@click.command()
+@click.group(cls=DefaultGroup, default="sync", default_if_no_args=False)
+def main():
+    pass
+
+
+@main.command()
+@click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
+@click.option("--credentials", default=sys.stdin, help="compose file to work with", type=click.File("r"))
+def import_kube_host(kube_host=None, credentials=None):
+    """
+    Import the credentials for a kubernetes cluster into the local ~/.kube/config
+    """
+    read_kube_credentials(kube_host, credentials)
+
+
+@main.command()
 @click.argument("source", nargs=-1)
 @click.argument("destination", default="", nargs=1)
 @click.option("--supervisor/--no-supervisor", default=False, help="Try to install supervisor in container", type=bool)
 @click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
 @click.option("--pod-timeout", default=30, help="Pod reconfiguration timeout (default is 30 seconds)", type=int)
-def main(source, destination, supervisor, kube_host, pod_timeout):
+@click.option("--full-sync/--no-full-sync", default=True, help="On startup, sync all files to destination", type=bool)
+def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     """
     Watches a folder for changes and propagates all file changes to a destination.
 
@@ -209,6 +227,7 @@ def main(source, destination, supervisor, kube_host, pod_timeout):
         kube_host=kube_host,
         pod_timeout=pod_timeout,
         container_command=config.container_command,
+        full_sync=full_sync,
     )
     backend_engine_factory = BACKENDS.get(backend)
     backend_engine = backend_engine_factory(**backend_options)
