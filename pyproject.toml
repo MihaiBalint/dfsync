@@ -9,10 +9,12 @@ python = "^3.7"
 watchdog = "^2.0.2"
 gitpython = "^3.1.14"
 kubernetes = "^12.0.1"
-click = "^7"
+click = "^8"
 toml = "^0.10.2"
 tenacity = "^8.0.1"
 click-default-group = "^1.2.2"
+paramiko = {version = "^3.2.0", extras = ["invoke"]}
+black = "^23.3.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^3.0"
