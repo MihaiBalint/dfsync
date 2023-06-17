@@ -1,10 +1,10 @@
 import sys
-from dfsync.monitor import main
+from dfsync.monitor import main as sync_main
 
 
 def dfsync(*args, **kwargs):
-    main()
+    sync_main()
 
 
 if __name__ == "__main__":
-    main()
+    sync_main()
