@@ -15,7 +15,7 @@ from dfsync.backends import kube_backend
 from dfsync.filters import ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
-from dfsync.kube_credentials import read_kube_credentials
+from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config
 
 logging.basicConfig(level=logging.WARN)
 
@@ -154,7 +154,8 @@ def import_kube_host(kube_host=None, credentials=None):
     """
     Import the credentials for a kubernetes cluster into the local ~/.kube/config
     """
-    read_kube_credentials(kube_host, credentials)
+    patch = contextualize_kube_credentials(kube_host, credentials)
+    update_local_kube_config(patch)
 
 
 @main.command()
