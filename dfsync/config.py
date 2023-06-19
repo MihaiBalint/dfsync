@@ -1,8 +1,12 @@
 import os, toml
 from collections import namedtuple
 
-Configuration = namedtuple("Configuration", ("additional_sources", "destination", "pod_timeout", "container_command"))
-default_config = Configuration(additional_sources=[], destination=None, pod_timeout=30, container_command=None)
+Configuration = namedtuple(
+    "Configuration", ("additional_sources", "destination", "pod_timeout", "container_command", "ignore_files")
+)
+default_config = Configuration(
+    additional_sources=[], destination=None, pod_timeout=30, container_command=None, ignore_files=[]
+)
 
 
 def get_absolute_path_relative_to(pyproject_path, relative_path):

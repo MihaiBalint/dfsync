@@ -12,7 +12,7 @@ from watchdog.events import FileSystemEventHandler
 
 from dfsync.backends import rsync_backend
 from dfsync.backends import kube_backend
-from dfsync.filters import ALL_FILTERS
+from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
 from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config
@@ -153,6 +153,9 @@ def main():
 def import_kube_host(kube_host=None, credentials=None):
     """
     Import the credentials for a kubernetes cluster into the local ~/.kube/config
+    This is designed to be easily used in conjunction with an ssh command, for e.g.
+
+    ssh user@kube-host -C "sudo cat /root/.kube/config" | dfsync import-kube-host --kube-host=https://kube-host:6443
     """
     patch = contextualize_kube_credentials(kube_host, credentials)
     update_local_kube_config(patch)
@@ -205,6 +208,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
 
     paths = ["."] if len(source) == 0 else source
     config = read_config(destination, *paths)
+    add_user_ignored_patterns_filter(config.ignore_files)
 
     destination_dir = destination
     if len(source) == 0 and config.destination and not has_destination_optics(destination):

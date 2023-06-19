@@ -44,19 +44,33 @@ class LoggingFilter:
         return self.is_filtered(*args, **kwargs) is False
 
 
-class EmacsBufferFilter(LoggingFilter):
+class UserConfigFilter(LoggingFilter):
+    def __init__(self, ignored_patterns):
+        super().__init__()
+        self._ignored_patterns = ignored_patterns
+        self._ignore_message = "ffsync user config"
+        for pattern in ignored_patterns:
+            if "*" not in pattern:
+                self.ignored_files.add(pattern)
+
     def is_filtered(self, src_file_path: str = None, event=None, **kwargs):
         src_file_path = src_file_path or event.src_path
         if src_file_path is None:
             raise ValueError("A file path or watchdog event is required")
 
         parent_path, file_name = os.path.split(os.path.expanduser(src_file_path))
-        for pattern in EMACS_PATTERNS:
+        for pattern in self._ignored_patterns:
             if fnmatch.fnmatch(file_name, pattern):
-                self._ignore(src_file_path, "Emacs buffer backup")
+                self._ignore(src_file_path, self._ignore_message)
                 return True
 
         return False
+
+
+class EmacsBufferFilter(UserConfigFilter):
+    def __init__(self):
+        super().__init__(EMACS_PATTERNS)
+        self._ignore_message = "ffsync user config"
 
 
 class UntrackedGitFilesFilter(LoggingFilter):
@@ -137,13 +151,18 @@ class UntrackedGitFilesFilter(LoggingFilter):
         return False
 
 
-EDITOR_FILTERS = [EmacsBufferFilter()]
+USER_FILTERS = [EmacsBufferFilter()]
 GIT_FILTER = UntrackedGitFilesFilter()
+ALL_FILTERS = [
+    exclude_watchdog_directory_events,
+    *[f.is_not_filtered for f in USER_FILTERS],
+    GIT_FILTER.is_not_filtered,
+]
 
 
 def list_files_to_ignore():
     result = set(GIT_FILTER.get_untracked_and_ignored_files())
-    for editor_filter in EDITOR_FILTERS:
+    for editor_filter in USER_FILTERS:
         result = {*result, *editor_filter.ignored_files}
     return result
 
@@ -155,8 +174,12 @@ def path_is_parent(parent_path, child_path):
     return os.path.commonpath([parent_path]) == os.path.commonpath([parent_path, child_path])
 
 
-ALL_FILTERS = [
-    exclude_watchdog_directory_events,
-    *[f.is_not_filtered for f in EDITOR_FILTERS],
-    GIT_FILTER.is_not_filtered,
-]
+def add_user_filter(f: LoggingFilter):
+    if f is None:
+        raise ValueError("Expecting non-null user filter")
+    USER_FILTERS.append(f)
+    ALL_FILTERS.append(f.is_not_filtered)
+
+
+def add_user_ignored_patterns_filter(patterns: [str]):
+    add_user_filter(UserConfigFilter(patterns))
