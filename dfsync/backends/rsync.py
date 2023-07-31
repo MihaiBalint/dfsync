@@ -62,6 +62,8 @@ class FileRsync:
             rsync_cmd = [
                 "rsync",
                 "-Rvx",
+                "--temp-dir=/tmp",
+                "--delay-updates",
                 *blocking_io,
                 *rsh,
                 *src_file_paths,
@@ -133,6 +135,8 @@ class FileRsync:
         return [
             "rsync",
             "-rvx",
+            "--temp-dir=/tmp",
+            "--delay-updates",
             "--delete",
             "--filter=- .git/",
             *filters,
