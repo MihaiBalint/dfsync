@@ -11,7 +11,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from dfsync.backends import rsync_backend, kube_backend
-from dfsync.distribution import get_installed_version, get_latest_version, is_older_version
+from dfsync.distribution import get_installed_version, get_latest_version, is_older_version, AsyncVersionChecker
 from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
@@ -150,11 +150,11 @@ def main():
 @main.command()
 def version():
     installed_version = get_installed_version()
+    click.echo(f"{installed_version}")
+
     latest_version = get_latest_version()
     if is_older_version(installed_version, latest_version):
-        click.echo(f"{installed_version} (latest available: {latest_version})")
-    else:
-        click.echo(f"{installed_version} (latest)")
+        click.echo(f"Latest version is {latest_version}, please upgrade!")
 
 
 @main.command()
@@ -249,6 +249,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     if backend_engine is None:
         raise ValueError("Backend not found: {}".format(backend))
 
+    checker = AsyncVersionChecker()
     controller = KeyController()
 
     handlers = []
@@ -276,6 +277,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
         click.echo("Watching dir(s): '{}'; press [Ctrl-C] to exit\n".format("', '".join(paths)))
         observer.start()
 
+        checker.start()
         controller.help()
         controller.start()
 
@@ -286,6 +288,10 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
                 if event_handler.raised_exception:
                     no_errors = False
                     break
+            with controller.getch_lock():
+                if checker.should_emit_upgrade_warning:
+                    checker.set_emitted_upgrade_warning()
+                    click.echo(checker.get_upgrade_warning())
             controller.raise_exceptions()
 
     except KeyboardInterrupt:
@@ -298,6 +304,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
 
     finally:
         observer.stop()
+        checker.stop()
         backend_engine.on_monitor_exit(**backend_options)
         if observer.ident is not None:
             # only join the observer if it was previously started

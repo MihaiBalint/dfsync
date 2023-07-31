@@ -2,6 +2,7 @@ import time, threading
 from functools import partial
 from collections import namedtuple
 from contextlib import contextmanager
+from dfsync.lib import ControlledThreadedOperation
 
 
 class _GetchUnix:
@@ -59,31 +60,22 @@ class KeyHandlerException(Exception):
 KeyHandler = namedtuple("KeyHandler", "keys description action")
 
 
-class KeyController:
+class KeyController(ControlledThreadedOperation):
     def __init__(self):
+        super().__init__()
         self.handlers = []
         self.key_handlers = {}
-        self._running = False
-        self._thread = threading.Thread(target=self.run)
         self._exception = None
 
         self.on_key("h", "?", description="for help", action=self.help)
         self.on_key("\r", description=None, action=self.echo)
         self.on_key("\x03", description=None, action=self._keyboard_interrupt)
 
-    @property
-    def is_running(self):
-        return self._running
-
-    def start(self):
-        self._running = True
-        self._thread.start()
-
     def stop(self, message: str = None):
         getch.stop()
         if message:
             self.echo(message)
-        self._running = False
+        super().stop()
 
     @contextmanager
     def getch_lock(self):

@@ -1,5 +1,6 @@
 import json
 import urllib.request
+from dfsync.lib import ControlledThreadedOperation
 
 
 def get_package_version(package_name):
@@ -65,3 +66,29 @@ def is_older_version(v1, v2):
     p1 = parse_version(v1)
     p2 = parse_version(v2)
     return p1 < p2
+
+
+class AsyncVersionChecker(ControlledThreadedOperation):
+    def __init__(self):
+        super().__init__()
+        self.latest = None
+        self.installed = None
+        self.installed_is_older = None
+        self._cta_count = None
+
+    def _run_once(self):
+        self.installed = get_installed_version()
+        self.latest = get_latest_version()
+        self.installed_is_older = is_older_version(self.installed, self.latest)
+        self._cta_count = 0
+        self.stop()
+
+    @property
+    def should_emit_upgrade_warning(self):
+        return self.is_completed and self._cta_count < 1
+
+    def set_emitted_upgrade_warning(self):
+        self._cta_count += 1
+
+    def get_upgrade_warning(self):
+        return f"dfsync ver. {self.latest} is available, please upgrade! ({self.installed} is installed)"
