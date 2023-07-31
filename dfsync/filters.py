@@ -1,4 +1,4 @@
-import fnmatch
+import black, fnmatch
 import os.path
 import git.exc
 import subprocess
@@ -14,6 +14,7 @@ def exclude_watchdog_directory_events(event=None, **kwargs):
 
 
 EMACS_PATTERNS = ["*~", "#*#", ".#*", ".goutputstream-*", "*_flymake.py"]
+PYTHON_PATTERNS = ["*.py"]
 
 
 def echo(msg):
@@ -31,9 +32,9 @@ class LoggingFilter:
 
         reason = reason or ""
         if len(reason):
-            reason = ", {}".format(reason)
+            reason = f", {reason}"
 
-        echo("Ignored {}{}".format(src_file_path, reason))
+        echo(f"Ignored {src_file_path}{reason}")
 
     def _unignore(self, src_file_path: str):
         if src_file_path not in self.ignored_files:
@@ -71,6 +72,33 @@ class EmacsBufferFilter(UserConfigFilter):
     def __init__(self):
         super().__init__(EMACS_PATTERNS)
         self._ignore_message = "Emacs buffer backup"
+
+
+class PythonBlackFilter(LoggingFilter):
+    def __init__(self):
+        super().__init__()
+
+    def is_filtered(self, src_file_path: str = None, event=None, **kwargs):
+        src_file_path = src_file_path or event.src_path
+        if src_file_path is None:
+            raise ValueError("A file path or watchdog event is required")
+
+        parent_path, file_name = os.path.split(os.path.expanduser(src_file_path))
+        for pattern in PYTHON_PATTERNS:
+            if fnmatch.fnmatch(file_name, pattern):
+                return self._black_check(src_file_path)
+        return False
+
+    def _black_check(self, src_file_path):
+        try:
+            with open(src_file_path, "r") as f:
+                contents = f.read()
+                black.format_file_contents(contents, fast=False, mode=black.FileMode())
+            return False
+
+        except Exception as e:
+            echo(f"Rejected {src_file_path}, {e}")
+            return True
 
 
 class UntrackedGitFilesFilter(LoggingFilter):
@@ -151,7 +179,7 @@ class UntrackedGitFilesFilter(LoggingFilter):
         return False
 
 
-USER_FILTERS = [EmacsBufferFilter()]
+USER_FILTERS = [EmacsBufferFilter(), PythonBlackFilter()]
 GIT_FILTER = UntrackedGitFilesFilter()
 ALL_FILTERS = [
     exclude_watchdog_directory_events,

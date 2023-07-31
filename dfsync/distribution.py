@@ -85,7 +85,7 @@ class AsyncVersionChecker(ControlledThreadedOperation):
 
     @property
     def should_emit_upgrade_warning(self):
-        return self.is_completed and self._cta_count < 1
+        return self.is_completed and self.installed_is_older and self._cta_count < 1
 
     def set_emitted_upgrade_warning(self):
         self._cta_count += 1
