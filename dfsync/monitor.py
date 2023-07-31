@@ -10,8 +10,8 @@ from functools import partial
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-from dfsync.backends import rsync_backend
-from dfsync.backends import kube_backend
+from dfsync.backends import rsync_backend, kube_backend
+from dfsync.distribution import get_installed_version, get_latest_version, is_older_version
 from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
@@ -145,6 +145,16 @@ def has_destination_optics(destination):
 @click.group(cls=DefaultGroup, default="sync", default_if_no_args=False)
 def main():
     pass
+
+
+@main.command()
+def version():
+    installed_version = get_installed_version()
+    latest_version = get_latest_version()
+    if is_older_version(installed_version, latest_version):
+        click.echo(f"{installed_version} (latest available: {latest_version})")
+    else:
+        click.echo(f"{installed_version} (latest)")
 
 
 @main.command()
