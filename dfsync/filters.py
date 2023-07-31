@@ -48,7 +48,7 @@ class UserConfigFilter(LoggingFilter):
     def __init__(self, ignored_patterns):
         super().__init__()
         self._ignored_patterns = ignored_patterns
-        self._ignore_message = "ffsync user config"
+        self._ignore_message = "ignoring, matches pattern from ignore_files config"
         for pattern in ignored_patterns:
             if "*" not in pattern:
                 self.ignored_files.add(pattern)
@@ -70,7 +70,7 @@ class UserConfigFilter(LoggingFilter):
 class EmacsBufferFilter(UserConfigFilter):
     def __init__(self):
         super().__init__(EMACS_PATTERNS)
-        self._ignore_message = "ffsync user config"
+        self._ignore_message = "Emacs buffer backup"
 
 
 class UntrackedGitFilesFilter(LoggingFilter):
