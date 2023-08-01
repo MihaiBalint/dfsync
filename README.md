@@ -19,7 +19,7 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
     - Python Version
       ```bash
       $ python --version
-      Python 3.6  # At least version 3.6 or above.
+      Python 3.8  # Python version 3.8 or above are required
       ```
     - Install using pip package manager
       ````bash
@@ -36,7 +36,7 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
     - After Installation of **poetry** verify that it's available
       ```bash
       $ poety --version
-      Poetry version 1.1.11
+      Poetry (version 1.5.1)
       ```
     - Clone the dfsync repository
       ```bash
@@ -50,7 +50,7 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
       ```
     - If the build completed without errors and you are in the dfsync source dir, install the build on your system's python using _pip_ command
       ```bash
-      $ pip install ./dist/dfsync-0.3.8-py3-none-any.whl   # Version might be different 
+      $ pip install ./dist/dfsync-0.4.0-py3-none-any.whl   # Version might be different 
       ```
 ---
         
