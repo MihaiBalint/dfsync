@@ -50,7 +50,7 @@ So, you are doing AI/ML development and you have a big GPU/TPU server somewhere 
       ```
     - If the build completed without errors and you are in the dfsync source dir, install the build on your system's python using _pip_ command
       ```bash
-      $ pip install ./dist/dfsync-0.4.0-py3-none-any.whl   # Version might be different 
+      $ pip install ./dist/dfsync-0.4.1-py3-none-any.whl   # Version might be different
       ```
 ---
         
