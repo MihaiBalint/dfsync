@@ -96,8 +96,12 @@ class PythonBlackFilter(LoggingFilter):
                 black.format_file_contents(contents, fast=False, mode=black.FileMode())
             return False
 
+        except black.report.NothingChanged as e:
+            return False
+
         except Exception as e:
-            echo(f"Rejected {src_file_path}, {e}")
+            message = str(e) or type(e).__name__
+            echo(f"Rejected {src_file_path}, {message}")
             return True
 
 
