@@ -34,7 +34,14 @@ class IgnoreEvent(Exception):
 
 
 class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandler):
-    def __init__(self, backend: str = "log", watched_dir: str = ".", input_controller: KeyController = None, **kwargs):
+    def __init__(
+        self,
+        backend: str = "log",
+        watched_dir: str = ".",
+        all_watched_dirs: list = None,
+        input_controller: KeyController = None,
+        **kwargs,
+    ):
         super().__init__()
         self.filters = [*ALL_FILTERS]
 
@@ -46,6 +53,7 @@ class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandle
         self.input_controller = input_controller
         self.events = queue.Queue(maxsize=10000)
         self.full_sync_threashold = 3
+        self.all_watched_dirs = all_watched_dirs if all_watched_dirs is not None else [watched_dir]
 
     def _log_backend(self, event):
         logging.info(event)
@@ -149,7 +157,7 @@ class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandle
                 sync_events = self._filter_events(latest_events, stop_threashold=self.full_sync_threashold)
                 if len(sync_events) >= self.full_sync_threashold:
                     with self.terminal_lock():
-                        self.backend.sync_project([self.watched_dir], **self.backend_options)
+                        self.backend.sync_project(self.all_watched_dirs, **self.backend_options)
                 else:
                     for event in sync_events:
                         with self.terminal_lock():
@@ -325,7 +333,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     observer = Observer()
     for p in paths:
         event_handler = FileChangedEventHandler(
-            backend_engine, watched_dir=p, input_controller=controller, **backend_options
+            backend_engine, watched_dir=p, all_watched_dirs=paths, input_controller=controller, **backend_options
         )
         handlers.append(event_handler)
         event_handler.start()
