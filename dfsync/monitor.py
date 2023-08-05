@@ -4,8 +4,10 @@ import os.path
 import sys
 import time
 import logging
+import queue
 
 from click_default_group import DefaultGroup
+from contextlib import contextmanager
 from functools import partial
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -16,7 +18,7 @@ from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
 from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config
-from dfsync.lib import thread_manager
+from dfsync.lib import ControlledThreadedOperation, thread_manager
 
 logging.basicConfig(level=logging.WARN)
 
@@ -31,18 +33,41 @@ class IgnoreEvent(Exception):
     pass
 
 
-class FileChangedEventHandler(FileSystemEventHandler):
+class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandler):
     def __init__(self, backend: str = "log", watched_dir: str = ".", input_controller: KeyController = None, **kwargs):
+        super().__init__()
         self.filters = [*ALL_FILTERS]
 
         self.backend = backend
         self.backend_options = kwargs
         self.raised_exception = False
+        self.watched_dir = watched_dir
         self.abs_watched_dir = os.path.abspath(watched_dir)
         self.input_controller = input_controller
+        self.events = queue.Queue(maxsize=10000)
+        self.full_sync_threashold = 3
 
     def _log_backend(self, event):
         logging.info(event)
+
+    @contextmanager
+    def _input_lock(self):
+        if self.input_controller is None:
+            yield self
+        else:
+            with self.input_controller.getch_lock():
+                yield self
+
+    @contextmanager
+    def terminal_lock(self):
+        try:
+            with self._input_lock():
+                yield self
+        except IgnoreEvent:
+            pass
+        except:
+            self.raised_exception = True
+            raise
 
     def _sync(self, event):
         # It seems like in some contexts, event.src_path will be an absolute path
@@ -79,24 +104,67 @@ class FileChangedEventHandler(FileSystemEventHandler):
         except ValueError as e:
             raise IgnoreEvent() from e
 
-    def _propagate_event(self, event):
-        for file_filter in self.filters:
-            if file_filter(event=event) is False:
-                return
-        self._sync(event)
+    def _drain_queue(self, timeout=0.5):
+        event = self.events.get(block=True, timeout=timeout)
+        latest_events = {event.src_path: event}
+        try:
+            # Allow a bit of time for the queue to fill
+            if self.events.qsize() == 0:
+                time.sleep(0.25)
+            # Started filling? allow a little bit more time
+            if self.events.qsize() > 0:
+                time.sleep(0.4)
+
+            # Start draining
+            while self.events.qsize() > 0:
+                event = self.events.get_nowait()
+                # Only keep the latest event for a given file path
+                latest_events[event.src_path] = event
+
+        except queue.Empty:
+            pass
+        finally:
+            return latest_events.values()
+
+    def _filter_events(self, latest_events, stop_threashold=None):
+        sync_events = []
+        for event in latest_events:
+            filtered = False
+            for file_filter in self.filters:
+                with self.terminal_lock():
+                    if file_filter(event=event) is False:
+                        filtered = True
+                        break
+            if not filtered:
+                sync_events.append(event)
+            if stop_threashold is not None and len(sync_events) > stop_threashold:
+                return sync_events
+
+        return sync_events
+
+    def run(self):
+        while self._running:
+            try:
+                latest_events = self._drain_queue()
+                sync_events = self._filter_events(latest_events, stop_threashold=self.full_sync_threashold)
+                if len(sync_events) >= self.full_sync_threashold:
+                    with self.terminal_lock():
+                        self.backend.sync_project([self.watched_dir], **self.backend_options)
+                else:
+                    for event in sync_events:
+                        with self.terminal_lock():
+                            self._sync(event)
+            except queue.Empty:
+                time.sleep(0.001)
 
     def catch_all_handler(self, event):
         try:
-            if self.input_controller is None:
-                self._propagate_event(event)
-            else:
-                with self.input_controller.getch_lock():
-                    self._propagate_event(event)
-        except IgnoreEvent:
+            # Add sync event to the sync queue
+            self.events.put(event)
+        except queue.Full:
+            # It's acceptable for events to be rejected from the queue
+            # because a busy queue will trigger a full-sync
             pass
-        except:
-            self.raised_exception = True
-            raise
 
     def on_moved(self, event):
         self.catch_all_handler(event)
@@ -260,6 +328,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
             backend_engine, watched_dir=p, input_controller=controller, **backend_options
         )
         handlers.append(event_handler)
+        event_handler.start()
         observer.schedule(event_handler, os.path.abspath(p), recursive=True)
 
     controller.on_key(
