@@ -96,7 +96,7 @@ class PythonBlackFilter(LoggingFilter):
                 black.format_file_contents(contents, fast=False, mode=black.FileMode())
             return False
 
-        except black.report.NothingChanged as e:
+        except (FileNotFoundError, PermissionError, black.report.NothingChanged) as e:
             return False
 
         except Exception as e:
