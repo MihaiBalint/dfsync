@@ -1,6 +1,7 @@
-import logging, os, os.path, subprocess
+import logging, os, os.path, select, subprocess, time
 
 from dfsync.filters import list_files_to_ignore
+from dfsync.lib import ControlledThreadedOperation
 
 EVENT_TYPE_MAP = {
     "created": "Created",
@@ -8,6 +9,107 @@ EVENT_TYPE_MAP = {
     "default": "Synced",
     "full-sync": "Full Sync",
 }
+
+
+class StopStreamReader(Exception):
+    pass
+
+
+class RsyncStreamReader(ControlledThreadedOperation):
+    def __init__(self, stream):
+        super().__init__()
+        if stream is None:
+            raise ValueError("Rsync status stream must not be None")
+
+        self.stream = stream
+        self.timeout = 300.0
+
+        self.rsync_stats = None
+        self.rsync_error = None
+        self.rsync_permission_error_count = 0
+        self.stream_closed = False
+
+    def read_lines(self):
+        spoll = select.poll()
+        spoll.register(self.stream, select.POLLIN)
+        try:
+            line_timestamp = time.monotonic()
+            elapsed = 0
+
+            while elapsed < self.timeout:
+                if spoll.poll(0):
+                    line = self.stream.readline()
+                    if len(line) > 0:
+                        line_timestamp = time.monotonic()
+                        yield line.decode("utf8")
+                    else:
+                        return
+                else:
+                    time.sleep(0.1)
+                elapsed = time.monotonic() - line_timestamp
+
+            if elapsed >= self.timeout:
+                raise subprocess.TimeoutExpired(cmd="read_lines", timeout=self.timeout)
+        except ValueError:
+            pass
+
+        finally:
+            self.stream_closed = True
+
+            try:
+                spoll.unregister(self.stream)
+            except:
+                # don't care at this point
+                pass
+
+            try:
+                self.stream.close()
+            except:
+                # don't care at this point
+                pass
+
+    def run(self):
+        try:
+            for line in self.read_lines():
+                if line and line.startswith("sent "):
+                    # stdout
+                    self.rsync_stats = line.strip()
+                elif line and line.startswith("X11 forwarding"):
+                    # stdout
+                    pass
+                elif line and line.startswith("building file list"):
+                    # stdout
+                    pass
+                elif line and line.startswith("total size"):
+                    # stdout
+                    pass
+                elif line and line.startswith("rsync error"):
+                    # stderr
+                    self.rsync_error = line.strip()
+                elif line and line.startswith("rsync: ") and "failed: Permission" in line:
+                    # stderr
+                    self.rsync_permission_error_count += 1
+                elif line and line.startswith("rsync: ") and "failed: Resource busy" in line:
+                    # stderr
+                    self.rsync_permission_error_count += 1
+
+                elif line and line.strip():
+                    # echo(line.strip())
+                    pass
+
+                if not self.is_running:
+                    self.timeout = 1.0
+
+        except (subprocess.TimeoutExpired, StopStreamReader):
+            # Stop silently
+            pass
+
+    def stop(self, *args, **kwargs):
+        super().stop(*args, **kwargs)
+        self.stream.close()
+
+        while not self.stream_closed:
+            time.sleep(1.0)
 
 
 def echo(msg=""):
@@ -76,14 +178,43 @@ class FileRsync:
         if rsync_cwd:
             popen_args.update(dict(cwd=rsync_cwd))
         try:
-            subprocess.check_call(
+            rsync_process = subprocess.Popen(
                 rsync_cmd,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 env=rsh_env,
                 **popen_args,
             )
+            stdout = RsyncStreamReader(rsync_process.stdout)
+            stdout.start()
+
+            stderr = RsyncStreamReader(rsync_process.stderr)
+            stderr.start()
+
+            return_code = rsync_process.wait(timeout=None)
+
+            stdout.stop()
+            stderr.stop()
+
+            if stdout.rsync_stats:
+                echo(f"  {stdout.rsync_stats}")
+
+            if return_code != 0:
+                if stderr.rsync_error:
+                    echo(f"  {stderr.rsync_error}")
+                else:
+                    echo(f"  rsync exit code: {return_code}")
+
+                if stderr.rsync_permission_error_count > 0:
+                    files = "file" if stderr.rsync_permission_error_count == 1 else "files"
+                    echo(
+                        f"  {stderr.rsync_permission_error_count} {files} had permission or other issues on destination"
+                    )
+
+                if return_code != 23:
+                    raise subprocess.CalledProcessError(returncode=return_code, cmd=rsync_cmd)
+
         except:
             echo("Sync failed")
             env_str = "N/A"

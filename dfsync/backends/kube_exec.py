@@ -46,14 +46,21 @@ def main():
         print(f"[{pod_name}] Running: {cmd_str}", file=f, flush=True)
         try:
             subprocess.check_call(cmd)
+            return 0
+
+        except subprocess.CalledProcessError as e:
+            err = str(e) or type(e)
+            print(f"[{pod_name}] Error: {err}", file=f, flush=True)
+            return e.returncode
 
         except Exception as e:
             err = str(e) or type(e)
             print(f"[{pod_name}] Error: {err}", file=f, flush=True)
+            return 1
 
         finally:
             print(f"[{pod_name}] Exiting", file=f, flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
