@@ -16,6 +16,7 @@ from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
 from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config
+from dfsync.lib import thread_manager
 
 logging.basicConfig(level=logging.WARN)
 
@@ -269,7 +270,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     controller.on_key(
         "x",
         description="to exit",
-        action=partial(controller.stop, "Exiting."),
+        action=partial(thread_manager.stop, "Exiting."),
     )
 
     try:
@@ -295,16 +296,16 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
             controller.raise_exceptions()
 
     except KeyboardInterrupt:
-        controller.stop()
+        thread_manager.stop()
         click.echo("Received [Ctrl-C], exiting.")
 
     except:
-        controller.stop()
+        thread_manager.stop()
         raise
 
     finally:
         observer.stop()
-        checker.stop()
+        thread_manager.stop()
         backend_engine.on_monitor_exit(**backend_options)
         if observer.ident is not None:
             # only join the observer if it was previously started
