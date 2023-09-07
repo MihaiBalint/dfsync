@@ -24,12 +24,16 @@ logging.basicConfig(level=logging.WARN)
 
 BACKENDS = {
     # File sync backends
-    "rsync": rsync_backend,
-    "kube": kube_backend,
+    "file-rsync": rsync_backend,
+    "kube-rsync": kube_backend,
 }
 
 
 class IgnoreEvent(Exception):
+    pass
+
+
+class RelatedLocationsError(ValueError):
     pass
 
 
@@ -190,9 +194,9 @@ class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandle
 def split_destination(destination):
     kube = "kube://"
     if destination.lower().startswith(kube):
-        return "kube", destination[len(kube) :]
+        return "kube-rsync", destination[len(kube) :]
     else:
-        return "rsync", destination
+        return "file-rsync", destination
 
 
 def filter_missing_paths(paths: list):
@@ -204,6 +208,24 @@ def filter_missing_paths(paths: list):
         else:
             missing_paths.append(p)
     return missing_paths, existing_paths
+
+
+def check_that_source_and_destination_are_unrelated(source_paths, destination):
+    abs_destination = os.path.abspath(destination)
+    destination_parent, _ = os.path.split(abs_destination)
+
+    for path in source_paths:
+        abs_path = os.path.abspath(path)
+        if destination_parent.startswith(abs_path):
+            raise RelatedLocationsError(
+                "The destination location must not descend from any of the sources.\n"
+                "Please verify that the dfsync section from pyproject.yaml is valid."
+            )
+        elif abs_path.startswith(abs_destination):
+            raise RelatedLocationsError(
+                "Source locations must not descend from the destination.\n"
+                "Please verify that the dfsync section from pyproject.yaml is valid."
+            )
 
 
 def has_destination_optics(destination):
@@ -302,29 +324,54 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
         destination_dir = config.destination
         paths = [destination]
     missing, paths = filter_missing_paths([*config.additional_sources, *paths])
-    if len(missing) > 0:
+    if len(missing) > 0 and len(paths) > 0:
         click.echo(f"Source file/dirs not found: {', '.join(missing)}")
 
-    if len(paths) == 0:
-        raise ValueError("No source file/dirs found")
-    elif len(missing) > 0:
-        click.echo(f"Using source file/dirs {', '.join(paths)}")
-
     backend, destination_dir = split_destination(destination_dir)
-    click.echo("Destination, {}: '{}'".format(backend, destination_dir))
+    try:
+        if len(paths) == 0:
+            raise ValueError("No source file/dirs found")
+        elif len(missing) > 0:
+            click.echo(f"Using source file/dirs {', '.join(paths)}")
 
-    backend_options = dict(
-        destination_dir=destination_dir,
-        supervisor=supervisor,
-        kube_host=kube_host,
-        pod_timeout=pod_timeout,
-        container_command=config.container_command,
-        full_sync=full_sync,
-    )
-    backend_engine_factory = BACKENDS.get(backend)
-    backend_engine = backend_engine_factory(**backend_options)
-    if backend_engine is None:
-        raise ValueError("Backend not found: {}".format(backend))
+        backend_options = dict(
+            destination_dir=destination_dir,
+            supervisor=supervisor,
+            kube_host=kube_host,
+            pod_timeout=pod_timeout,
+            container_command=config.container_command,
+            full_sync=full_sync,
+        )
+
+        backend_engine_factory = BACKENDS.get(backend)
+        backend_engine = backend_engine_factory(**backend_options)
+        if backend_engine is None:
+            raise ValueError("Backend not found: {}".format(backend))
+
+        check_that_source_and_destination_are_unrelated(paths, destination_dir)
+        click.echo("Trying {} to '{}'".format(backend, destination_dir))
+
+    except RelatedLocationsError as e:
+        click.echo(
+            "Trying {} from source: {} to destination: '{}'\n".format(
+                backend,
+                ", ".join([f"'{os.path.abspath(p)}'" for p in paths]),
+                os.path.abspath(destination_dir),
+            )
+        )
+        click.echo(str(e))
+        return -1
+
+    except ValueError as e:
+        click.echo(
+            "Trying {} from source: {} to destination: '{}'\n".format(
+                backend,
+                ", ".join([f"'{p}'" for p in paths or missing]),
+                destination_dir,
+            )
+        )
+        click.echo(str(e))
+        return -1
 
     checker = AsyncVersionChecker()
     controller = KeyController()
@@ -352,7 +399,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
 
     try:
         backend_engine.on_monitor_start(src_file_paths=paths, **backend_options)
-        click.echo("Watching dir(s): '{}'; press [Ctrl-C] to exit\n".format("', '".join(paths)))
+        click.echo("Watching source dir(s): '{}'; press [Ctrl-C] to exit\n".format("', '".join(paths)))
         observer.start()
 
         checker.start()
@@ -390,4 +437,4 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

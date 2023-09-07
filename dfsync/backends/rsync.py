@@ -117,8 +117,20 @@ def echo(msg=""):
 
 
 class FileRsync:
-    def __init__(self, **kwargs):
-        pass
+    def __init__(self, full_sync=None, **kwargs):
+        valued_args = {k: kwargs.get(k) for k in ["kube_host", "container_command"] if kwargs.get(k) is not None}
+
+        if len(valued_args) != 0:
+            keys = ", ".join(valued_args.keys())
+            message = f"Plain file-rsync operation does not support given arguments: {keys}."
+            kube_hints = ["kube_host", "pod_timeout", "container_command"]
+            if any(h in keys for h in kube_hints):
+                message = (
+                    f"{message}\n"
+                    "Are you trying to use dfsync with kubernetes? Your config might be incomplete/missing!\n"
+                    "Please verify that the dfsync section from pyproject.yaml is valid.\n"
+                )
+            raise ValueError(message)
 
     def sync(self, src_file_path, event=None, watched_dir: str = None, **kwargs):
         rsync_cwd = watched_dir
