@@ -12,7 +12,7 @@ def get_kubectl_exec_command(namespace, pod_name, container_name, kube_config=No
     pod_name = ["{}".format(pod_name)]
     ctnr = ["-c", "{}".format(container_name)] if container_name else []
 
-    return ["kubectl", *kubeconfig, *context, "exec", *pod_name, "-i", *ns, *ctnr, "--"]
+    return ["kubectl", "--insecure-skip-tls-verify", *kubeconfig, *context, "exec", *pod_name, "-i", *ns, *ctnr, "--"]
 
 
 def get_container_command():

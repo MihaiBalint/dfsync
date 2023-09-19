@@ -1,11 +1,10 @@
 from tempfile import NamedTemporaryFile
-from dfsync import __version__
 
 from dfsync.filters import EmacsBufferFilter, UntrackedGitFilesFilter
 
 
 def test_version():
-    assert __version__ == "0.1.0"
+    assert False, "Test version not implemented"
 
 
 def test_emacs_buffer_filter():

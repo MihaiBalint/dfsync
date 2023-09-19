@@ -2,6 +2,7 @@ import sys
 import os
 import os.path
 import json
+import urllib3
 
 from urllib.parse import urlparse
 from kubernetes import client, config, watch
@@ -14,6 +15,8 @@ from .rsync import rsync_backend
 
 DEFAULT_COMMAND = []
 DEFAULT_PULL_POLICY = "Always"
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class Alpine:
@@ -148,6 +151,17 @@ def please_wait(msg="Please wait"):
     print("⌛  {}...".format(msg))
 
 
+def _get_kube_api_client(context_name):
+    configuration = client.Configuration()
+    config.load_kube_config(
+        context=context_name,
+        client_configuration=configuration,
+    )
+    configuration.verify_ssl = True
+    configuration.assert_hostname = False
+    return client.ApiClient(configuration)
+
+
 def get_selected_kubernetes(kube_host=None):
     contexts, active_context = config.list_kube_config_contexts()
     if not contexts:
@@ -159,7 +173,7 @@ def get_selected_kubernetes(kube_host=None):
     active_context_api = None
     multiple_matches = False
     for c in contexts:
-        ctx_client = client.CoreV1Api(api_client=config.new_client_from_config(context=c["name"]))
+        ctx_client = client.CoreV1Api(api_client=_get_kube_api_client(c["name"]))
         context_apis.append([c, ctx_client])
 
         ctx_api_host = ctx_client.api_client.configuration.host
@@ -208,12 +222,11 @@ def get_selected_kubernetes(kube_host=None):
 class KubeReDeployer:
     def __init__(self, kube_host=None, pod_timeout=30, container_command=None, full_sync=True, **kwargs):
         config.load_kube_config()
-
         selected_context, selected_context_api = get_selected_kubernetes(kube_host)
 
         self.context_name = selected_context["name"]
         self.api = selected_context_api
-        self.apps_api = client.AppsV1Api(api_client=config.new_client_from_config(context=self.context_name))
+        self.apps_api = client.AppsV1Api(api_client=_get_kube_api_client(self.context_name))
 
         print(f"Using cluster: {self.context_name} on {self.api.api_client.configuration.host}")
         self.rsync_backend_instance = rsync_backend()
