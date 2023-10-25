@@ -4,9 +4,19 @@ from collections import namedtuple
 Configuration = namedtuple(
     "Configuration", ("additional_sources", "destination", "pod_timeout", "container_command", "ignore_files")
 )
-default_config = Configuration(
+_default_config = Configuration(
     additional_sources=[], destination=None, pod_timeout=30, container_command=None, ignore_files=[]
 )
+
+
+def default_config_deep_copy():
+    return Configuration(
+        additional_sources=[*_default_config.additional_sources],
+        destination=_default_config.destination,
+        pod_timeout=_default_config.pod_timeout,
+        container_command=_default_config.container_command,
+        ignore_files=_default_config.ignore_files,
+    )
 
 
 def get_absolute_path_relative_to(pyproject_path, relative_path):
@@ -24,7 +34,7 @@ def get_absolute_path_relative_to(pyproject_path, relative_path):
 
 
 def _read_pyproject(pyproject_path):
-    config = default_config
+    config = default_config_deep_copy()
     with open(pyproject_path, "r") as f:
         content = toml.loads(f.read())
         dfsync_config = content["tool"].get("dfsync", {}).get("configuration", {})
@@ -42,21 +52,22 @@ def _get_pyproject_path(path):
 
 def _merge_config(c1, c2):
     result = c1
-    pod_timeout = c2.pod_timeout if c2.pod_timeout != default_config.pod_timeout else c1.pod_timeout
-
+    pod_timeout = c2.pod_timeout if c2.pod_timeout != c1.pod_timeout else c1.pod_timeout
+    sources = set([*c1.additional_sources, *c2.additional_sources])
     result = c1._replace(
         **{
             **c2._asdict(),
-            "additional_sources": [*c1.additional_sources, *c2.additional_sources],
+            "additional_sources": list(sources),
             "destination": c2.destination or c1.destination,
+            "pod_timeout": pod_timeout,
         }
     )
     return result
 
 
 def read_config(*pyproject_parent_dirs):
-    config = default_config
-    for path in pyproject_parent_dirs:
+    config = default_config_deep_copy()
+    for path in set(pyproject_parent_dirs):
         pyproject_path = _get_pyproject_path(path)
         if pyproject_path is None:
             continue
