@@ -234,6 +234,7 @@ class KubeReDeployer:
         self.pod_timeout = pod_timeout
         self.container_command = container_command
         self._full_sync = full_sync
+        self._pod_blacklist = set()
 
     def supervisor_install(self, pod, spec, status):
         if self._is_supervised(pod, spec, status):
@@ -365,7 +366,12 @@ class KubeReDeployer:
                 icon = ready_map["dev"]
                 status_msg = "still sleeping, having recovered from crashed state"
 
-            print("{}{} - ready: {}".format(icon, pod.metadata.name, status_msg))
+            if pod.metadata.name in self._pod_blacklist:
+                icon = ready_map["dev"]
+                print("{}{} - Terminating".format(icon, pod.metadata.name))
+            else:
+                print("{}{} - ready: {}".format(icon, pod.metadata.name, status_msg))
+
         print("")
 
     def split_destination(self, destination):
@@ -441,6 +447,8 @@ class KubeReDeployer:
         image_base, destination_dir = self.split_destination(destination_dir)
 
         for pod, spec, status in self.generate_matching_containers(image_base):
+            if pod.metadata.name in self._pod_blacklist:
+                continue
             if not status.ready:
                 reason = "Unknown"
                 if status.state.waiting:
@@ -582,7 +590,7 @@ class KubeReDeployer:
         self._image_distro = list(distros)[0]
         print(f"Assuming OS in container image: {self._image_distro.name()}")
 
-    def toggle_supervisor(self, image_base, action="install"):
+    def toggle_supervisor(self, image_base, action="install", skip_cleanup=True):
         pods = {}
 
         for pod, spec, status in self.generate_matching_containers(image_base):
@@ -604,11 +612,14 @@ class KubeReDeployer:
             if pod.metadata.name not in pods:
                 continue
 
-            if event["type"] == "DELETED":
-                del pods[pod.metadata.name]
-            elif event["type"] != "ADDED" and not cleanup_started:
+            if event["type"] != "ADDED" and not cleanup_started:
                 please_wait("Cleaning up")
                 cleanup_started = True
+
+            if event["type"] == "DELETED" or (cleanup_started and skip_cleanup):
+                self._pod_blacklist.add(pod.metadata.name)
+                if pod.metadata.name in pods:
+                    del pods[pod.metadata.name]
 
             if len(pods) == 0:
                 w.stop()
