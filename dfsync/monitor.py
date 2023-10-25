@@ -211,6 +211,11 @@ def filter_missing_paths(paths: list):
 
 
 def check_that_source_and_destination_are_unrelated(source_paths, destination):
+    colon_split = destination.split(":")
+    if len(colon_split) == 2:
+        # Looks like destination is a remote server:path
+        return
+
     abs_destination = os.path.abspath(destination)
     destination_parent, _ = os.path.split(abs_destination)
 

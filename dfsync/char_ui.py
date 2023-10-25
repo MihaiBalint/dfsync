@@ -4,6 +4,9 @@ from collections import namedtuple
 from contextlib import contextmanager
 from dfsync.lib import ControlledThreadedOperation
 
+# TODO: consider using prompt-toolkit package
+# https://python-prompt-toolkit.readthedocs.io/en/master/pages/asking_for_input.html#prompt-in-an-asyncio-application
+
 
 class _GetchUnix:
     def __init__(self):
