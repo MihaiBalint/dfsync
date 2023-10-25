@@ -246,7 +246,7 @@ def has_destination_optics(destination):
     return is_kube or is_ssh
 
 
-@click.group(cls=DefaultGroup, default="sync", default_if_no_args=False)
+@click.group(cls=DefaultGroup, default="sync", default_if_no_args=False, context_settings=dict(max_content_width=999))
 def main():
     pass
 
