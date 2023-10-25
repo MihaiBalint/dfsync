@@ -541,7 +541,7 @@ class KubeReDeployer:
         for distro in [Alpine, ELinuxOS, Ubuntu]:
             try:
                 resp = self._exec(pod, spec, status, distro.check_package_manager())
-                if resp and "command not found" in resp:
+                if _is_command_not_found(resp):
                     continue
 
                 return distro
@@ -554,10 +554,10 @@ class KubeReDeployer:
     def dry_run_exec(self, pod, spec, status):
         try:
             resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
-            if resp and "command not found" in resp:
+            if _is_command_not_found(resp):
                 resp = self._exec(pod, spec, status, self._image_distro.install_rsync())
                 resp = self._exec(pod, spec, status, self._image_distro.check_rsync())
-                if resp and "command not found" in resp:
+                if _is_command_not_found(resp):
                     return False
 
             return len(resp) > 0
@@ -661,3 +661,15 @@ def marshall_spec_property(container_spec, key):
 
 
 kube_backend = KubeReDeployer
+
+
+def _is_command_not_found(resp: str):
+    if not resp:
+        return False
+    elif "command not found" in resp:
+        return True
+    elif ": not found" in resp:
+        # some versions of Debian/Ubuntu
+        return True
+    else:
+        return False
