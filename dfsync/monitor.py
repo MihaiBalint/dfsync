@@ -327,7 +327,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     destination_dir = destination
     if len(source) == 0 and config.destination and not has_destination_optics(destination):
         destination_dir = config.destination
-        paths = [destination]
+        paths = [destination] if destination else paths
     missing, paths = filter_missing_paths([*config.additional_sources, *paths])
     if len(missing) > 0 and len(paths) > 0:
         click.echo(f"Source file/dirs not found: {', '.join(missing)}")
