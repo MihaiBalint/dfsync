@@ -4,6 +4,14 @@ import yaml
 from urllib.parse import urlparse
 
 LOCAL_CREDENTIALS_FILE = os.path.expanduser("~/.kube/config")
+EMPTY_CREDENTIALS_FILE = """kind: Config
+apiVersion: v1
+clusters: []
+contexts: []
+preferences: {}
+users: []
+current-context: ""
+"""
 
 
 def update_local_kube_config(new_kube_credentials):
