@@ -4,19 +4,24 @@ import yaml
 from urllib.parse import urlparse
 
 LOCAL_CREDENTIALS_FILE = os.path.expanduser("~/.kube/config")
-EMPTY_CREDENTIALS_FILE = """kind: Config
-apiVersion: v1
+EMPTY_CREDENTIALS = """apiVersion: v1
+kind: Config
 clusters: []
 contexts: []
 preferences: {}
 users: []
-current-context: ""
+current-context: ''
 """
 
 
 def update_local_kube_config(new_kube_credentials):
-    with open(LOCAL_CREDENTIALS_FILE, "r") as f:
-        credentials = yaml.safe_load(f)
+    try:
+        with open(LOCAL_CREDENTIALS_FILE, "r") as f:
+            credentials = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        credentials = yaml.safe_load(EMPTY_CREDENTIALS)
+        kube_dir, _ = os.path.split(LOCAL_CREDENTIALS_FILE)
+        os.makedirs(kube_dir, exist_ok=True)
 
     clusters_entry = new_kube_credentials["clusters"][0]
     contexts_entry = new_kube_credentials["contexts"][0]
@@ -65,13 +70,18 @@ def update_local_kube_config(new_kube_credentials):
         credentials["users"].append(users_entry)
         print(f"Adding entry to users section '{user_name}'")
 
+    if not credentials["current-context"]:
+        credentials["current-context"] = contexts_entry["name"]
+
     credentials_yaml = yaml.dump(credentials)
     with open(f"{LOCAL_CREDENTIALS_FILE}.new", "w") as f:
         f.write(credentials_yaml)
 
-    if os.path.isfile(f"{LOCAL_CREDENTIALS_FILE}.old"):
-        os.remove(f"{LOCAL_CREDENTIALS_FILE}.old")
-    os.rename(f"{LOCAL_CREDENTIALS_FILE}", f"{LOCAL_CREDENTIALS_FILE}.old")
+    if os.path.isfile(LOCAL_CREDENTIALS_FILE):
+        if os.path.isfile(f"{LOCAL_CREDENTIALS_FILE}.old"):
+            os.remove(f"{LOCAL_CREDENTIALS_FILE}.old")
+        os.rename(f"{LOCAL_CREDENTIALS_FILE}", f"{LOCAL_CREDENTIALS_FILE}.old")
+
     os.rename(f"{LOCAL_CREDENTIALS_FILE}.new", f"{LOCAL_CREDENTIALS_FILE}")
 
     return credentials_yaml
