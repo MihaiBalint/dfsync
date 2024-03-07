@@ -70,7 +70,7 @@ def update_local_kube_config(new_kube_credentials):
         credentials["users"].append(users_entry)
         print(f"Adding entry to users section '{user_name}'")
 
-    if not credentials["current-context"]:
+    if not credentials.get("current-context"):
         credentials["current-context"] = contexts_entry["name"]
 
     credentials_yaml = yaml.dump(credentials)

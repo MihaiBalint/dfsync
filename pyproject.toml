@@ -17,11 +17,15 @@ paramiko = {version = "^3.2.0", extras = ["invoke"]}
 black = "23.7.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "^3.0"
+pytest = "^7.4"
+pytest_mock = "^3.12"
 ipython = "^8"
-ipdb = "^0.13.9"
+ipdb = "^0.13"
 flake8 = "^4.0.1"
 pycodestyle = "^2.8.0"
+
+[tool.black]
+line-length = 120
 
 [tool.poetry.scripts]
 dfsync = "dfsync.cli:dfsync"
