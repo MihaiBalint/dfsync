@@ -1,3 +1,4 @@
+import copy
 import sys
 import os
 import os.path
@@ -15,7 +16,22 @@ from .rsync import rsync_backend
 
 DEFAULT_COMMAND = []
 DEFAULT_PULL_POLICY = "Always"
-
+DISABLED_PROBES = {
+    "readiness_probe": {
+        "_exec": {"command": ["true"]},
+        "timeout_seconds": 5,
+        "period_seconds": 15,
+        "initial_delay_seconds": 0,
+        "failure_threshold": 3,
+    },
+    "startup_probe": {
+        "_exec": {"command": ["true"]},
+        "timeout_seconds": 2,
+        "period_seconds": 1,
+        "initial_delay_seconds": 0,
+        "failure_threshold": 60,
+    },
+}
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -147,6 +163,17 @@ class Generic:
         return ["true"]
 
 
+def clean_probe(probe: dict) -> client.V1Probe:
+    if probe is None:
+        return None
+
+    probe_types = ["_exec", "http_get", "tcp_socket", "grpc"]
+    probe = copy.deepcopy(probe)
+    cleaned = {k: v for k, v in probe.items() if k not in probe_types or k is not None}
+    assert any(pt in cleaned for pt in probe_types), f"Probe missing probe type: {probe.keys()}"
+    return client.V1Probe(**cleaned)
+
+
 def please_wait(msg="Please wait"):
     print("⌛  {}...".format(msg))
 
@@ -241,7 +268,16 @@ class KubeReDeployer:
             return
 
         command = self._image_distro.get_supervise_command(self.container_command)
-        deployments = self._edit_deployment(pod, spec, status, command=command, image_pull_policy="Never")
+        deployments = self._edit_deployment(
+            pod,
+            spec,
+            status,
+            command=command,
+            image_pull_policy="Never",
+            startup_probe=None,
+            readiness_probe=None,
+            liveness_probe=None,
+        )
 
         print("Supervisor installing on {}".format(" ".join(deployments)))
 
@@ -303,6 +339,8 @@ class KubeReDeployer:
                     existing_requests = container_spec.resources.requests or {}
                     new_requests = v.get("requests") or {}
                     container_spec.resources.requests = {**existing_requests, **new_requests}
+                elif k in ["readiness_probe", "startup_probe", "liveness_probe"]:
+                    setattr(container_spec, k, clean_probe(v or DISABLED_PROBES.get(k)))
                 else:
                     setattr(container_spec, k, v)
 
@@ -315,7 +353,7 @@ class KubeReDeployer:
                 metadata=deployment.metadata,
                 spec=deployment.spec,
             )
-            self.apps_api.patch_namespaced_deployment(
+            self.apps_api.replace_namespaced_deployment(
                 name=deployment.metadata.name,
                 namespace=namespace,
                 body=patch,
