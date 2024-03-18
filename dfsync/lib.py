@@ -1,4 +1,5 @@
-import time, threading
+import time
+import threading
 
 
 class ThreadedOperationsManager:
@@ -35,13 +36,13 @@ class ControlledThreadedOperation:
 
     @property
     def is_completed(self):
-        return self._running == False
+        return self._running is False
 
     def run(self):
         while self._running:
             try:
                 self._run_once()
-            except:
+            except Exception:
                 time.sleep(0.001)
 
     def _run_once(self):

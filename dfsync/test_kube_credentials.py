@@ -1,7 +1,8 @@
-import pytest, yaml, tempfile
+import pytest
+import yaml
+import tempfile
 
-import dfsync.kube_credentials
-from dfsync.kube_credentials import update_local_kube_config
+from dfsync.kube_credentials import update_local_kube_config, normalized_k8s_url
 
 
 @pytest.fixture
@@ -91,3 +92,16 @@ def test_update_existing_kube_config(mock_kube_credentials):
         assert credentials["users"][1]["name"] == "new_user"
         assert credentials["users"][1]["user"]["username"] == "new_username"
         assert credentials["users"][1]["user"]["password"] == "new_password"
+
+
+def test_normalized_k8s_url():
+    assert normalized_k8s_url("http://example.com") == "http://example.com"
+    assert normalized_k8s_url("https://example.com") == "https://example.com"
+    assert normalized_k8s_url("example.com") == "https://example.com"
+    assert normalized_k8s_url("http://example.com") == "http://example.com"
+    assert normalized_k8s_url("https://192.168.0.123:443") == "https://192.168.0.123:443"
+    assert normalized_k8s_url("192.168.0.123:6443") == "https://192.168.0.123:6443"
+    with pytest.raises(ValueError):
+        normalized_k8s_url("")
+    with pytest.raises(ValueError):
+        normalized_k8s_url(None)

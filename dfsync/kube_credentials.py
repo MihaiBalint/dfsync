@@ -132,3 +132,20 @@ def contextualize_kube_credentials(kube_host, credentials_file):
         print(exc)
 
     return {}
+
+
+def normalized_k8s_url(k8s_url: str) -> str:
+    parsed = None
+    result = k8s_url
+    if not k8s_url:
+        raise ValueError(f"Invalid k8s URL: `{k8s_url}`")
+    elif "://" not in k8s_url.lower():
+        result = f"https://{k8s_url}"
+        parsed = urlparse(result)
+    else:
+        parsed = urlparse(k8s_url)
+
+    if all([parsed.scheme, parsed.netloc]):
+        return result
+    else:
+        raise ValueError(f"Invalid k8s URL: `{k8s_url}`")

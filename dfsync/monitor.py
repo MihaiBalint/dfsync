@@ -17,7 +17,7 @@ from dfsync.distribution import get_installed_version, get_latest_version, is_ol
 from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
-from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config
+from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config, normalized_k8s_url
 from dfsync.lib import ControlledThreadedOperation, thread_manager
 
 logging.basicConfig(level=logging.WARN)
@@ -271,7 +271,7 @@ def import_kube_host(kube_host=None, credentials=None):
 
     ssh user@kube-host -C "sudo cat /root/.kube/config" | dfsync import-kube-host --kube-host=https://kube-host:6443
     """
-    patch = contextualize_kube_credentials(kube_host, credentials)
+    patch = contextualize_kube_credentials(normalized_k8s_url(kube_host), credentials)
     update_local_kube_config(patch)
 
 
@@ -342,7 +342,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
         backend_options = dict(
             destination_dir=destination_dir,
             supervisor=supervisor,
-            kube_host=kube_host,
+            kube_host=normalized_k8s_url(kube_host),
             pod_timeout=pod_timeout,
             container_command=config.container_command,
             full_sync=full_sync,
