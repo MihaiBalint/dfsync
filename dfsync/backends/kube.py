@@ -12,6 +12,7 @@ from kubernetes.client.exceptions import ApiException
 from tenacity import retry, retry_if_exception_type, wait_exponential, stop_after_attempt
 
 from dfsync.filters import GIT_FILTER
+from dfsync.kube_credentials import KubeContextConfig
 from .rsync import rsync_backend
 
 DEFAULT_COMMAND = []
@@ -178,84 +179,72 @@ def please_wait(msg="Please wait"):
     print("⌛  {}...".format(msg))
 
 
-def _get_kube_api_client(context_name):
-    configuration = client.Configuration()
-    config.load_kube_config(
-        context=context_name,
-        client_configuration=configuration,
-    )
-    configuration.verify_ssl = True
-    configuration.assert_hostname = False
-    return client.ApiClient(configuration)
+def get_selected_kubernetes(kube_host=None) -> KubeContextConfig:
+    try:
+        config.load_kube_config()
+    except Exception as e:
+        error_message = str(e)
+        print(f"Failed to load default kube config: {error_message}")
 
-
-def get_selected_kubernetes(kube_host=None):
     contexts, active_context = config.list_kube_config_contexts()
     if not contexts:
         raise ValueError("Cannot find any kubernetes contexts in kube-config file")
 
-    context_apis = []
-    selected_context = None
-    selected_context_api = None
-    active_context_api = None
+    k8sctx_configs = []
+    active_k8ctx = None
+    selected_k8ctx = None
     multiple_matches = False
+
     for c in contexts:
-        ctx_client = client.CoreV1Api(api_client=_get_kube_api_client(c["name"]))
-        context_apis.append([c, ctx_client])
+        k8sctx = KubeContextConfig(c["name"])
+        k8sctx_configs.append(k8sctx)
 
-        ctx_api_host = ctx_client.api_client.configuration.host
-        if c["name"] == active_context["name"]:
-            active_context_api = ctx_client
+        if k8sctx.context_name == active_context["name"]:
+            active_k8ctx = k8sctx
+            k8sctx.is_active = True
 
-        if kube_host is not None and kube_host.lower() == ctx_api_host.lower():
-            if selected_context is None:
-                selected_context = c
-                selected_context_api = ctx_client
+        if kube_host is not None and kube_host.lower() == k8sctx.host.lower():
+            if selected_k8ctx is None:
+                selected_k8ctx = k8sctx
+                k8sctx.is_selected = True
             else:
                 multiple_matches = True
 
-    if len(contexts) > 1 or multiple_matches or (kube_host is not None and selected_context is None):
-        print(f"Multiple kubernetes contexts in kube-config:")
+    if kube_host is None and selected_k8ctx is None and active_k8ctx is not None:
+        # Select the active context if no specific arg is given
+        selected_k8ctx = active_k8ctx
+        selected_k8ctx.is_selected = True
 
-        for c, ctx_client in context_apis:
-            ctx_api_host = ctx_client.api_client.configuration.host
-            tags = []
-            if c == selected_context:
-                tags.append("ACTIVE-SELECTED")
-            elif c["name"] == active_context["name"]:
-                tags.append("ACTIVE")
+    if len(contexts) > 1 or multiple_matches or (kube_host is not None and selected_k8ctx is None):
+        print("Multiple kubernetes contexts in kube-config:")
 
-            if len(tags) > 0:
-                tags_str = ",".join(tags)
-                print(f"  * {c['name']} on {ctx_api_host} [{tags_str}]")
-            else:
-                print(f"  * {c['name']} on {ctx_api_host}")
+        for k8sctx in k8sctx_configs:
+            print(f"  {k8sctx.active_glyph} {k8sctx.prettified_str}")
+
         if kube_host is None:
-            ctx_api_host = active_context_api.api_client.configuration.host
             print(
-                f"Add --kube-host={ctx_api_host} to use a specific kubernetes API host\n"
+                f"Add --kube-host={active_k8ctx.host} to use a specific kubernetes API host\n"
                 f"Alternatively, use 'kubectl config set current-context <name>' to set the current context"
             )
 
-    if kube_host is not None and selected_context is None:
+    if kube_host is not None and selected_k8ctx is None:
         raise ValueError(f"None of the kubernetes contexts match '{kube_host}'")
 
-    if selected_context is None:
-        selected_context = active_context
-        selected_context_api = active_context_api
-    return selected_context, selected_context_api
+    if selected_k8ctx is None:
+        raise ValueError("Failed to select a kubernetes context config")
+
+    return selected_k8ctx
 
 
 class KubeReDeployer:
     def __init__(self, kube_host=None, pod_timeout=30, container_command=None, full_sync=True, **kwargs):
-        config.load_kube_config()
-        selected_context, selected_context_api = get_selected_kubernetes(kube_host)
+        k8sctx = get_selected_kubernetes(kube_host)
 
-        self.context_name = selected_context["name"]
-        self.api = selected_context_api
-        self.apps_api = client.AppsV1Api(api_client=_get_kube_api_client(self.context_name))
+        self.context_name = k8sctx.context_name
+        self.api = k8sctx.core_v1_api()
+        self.apps_api = k8sctx.apps_v1_api()
 
-        print(f"Using cluster: {self.context_name} on {self.api.api_client.configuration.host}")
+        print(f"Using cluster: {k8sctx.prettified_str}")
         self.rsync_backend_instance = rsync_backend()
         self._image_distro = None
         self.pod_timeout = pod_timeout
