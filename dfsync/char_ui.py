@@ -60,7 +60,16 @@ class KeyHandlerException(Exception):
     pass
 
 
-KeyHandler = namedtuple("KeyHandler", "keys description action")
+class KeyHandler:
+    def __init__(self, keys, description, action, strict_case):
+        self.keys = keys
+        self.description = description
+        self.action = action
+
+        self.event_keys = set(keys)
+        if not strict_case:
+            self.event_keys.update([k.lower() for k in self.keys])
+            self.event_keys.update([k.upper() for k in self.keys])
 
 
 class KeyController(ControlledThreadedOperation):
@@ -97,12 +106,12 @@ class KeyController(ControlledThreadedOperation):
             except (Exception, KeyboardInterrupt) as e:
                 self._exception = e
 
-    def on_key(self, *keys, description: str = None, action=None):
+    def on_key(self, *keys, description: str = None, action=None, strict_case=False):
         if action is None:
             raise ValueError("'action' cannot be None")
-        handler = KeyHandler(keys=keys, description=description, action=action)
+        handler = KeyHandler(keys=keys, description=description, action=action, strict_case=strict_case)
         self.handlers.append(handler)
-        for k in keys:
+        for k in handler.event_keys:
             self.key_handlers[k] = handler
 
     def raise_exceptions(self):
