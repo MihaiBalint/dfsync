@@ -13,7 +13,14 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 from dfsync.backends import rsync_backend, kube_backend
-from dfsync.distribution import get_installed_version, get_latest_version, is_older_version, AsyncVersionChecker
+from dfsync.distribution import (
+    get_installed_version,
+    get_latest_version,
+    is_older_version,
+    AsyncVersionChecker,
+    is_installed_in_editable_mode,
+    update_package,
+)
 from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
@@ -253,12 +260,36 @@ def main():
 
 @main.command()
 def version():
+    """
+    Print the currently installed version
+    """
     installed_version = get_installed_version()
     click.echo(f"{installed_version}")
 
     latest_version = get_latest_version()
-    if is_older_version(installed_version, latest_version):
-        click.echo(f"Latest version is {latest_version}, please upgrade!")
+    if not is_older_version(installed_version, latest_version):
+        return
+    elif is_installed_in_editable_mode("dfsync"):
+        click.echo(f"Latest version is {latest_version}, please update!")
+    else:
+        click.echo(f"Latest version is {latest_version}, please update using `dfsync self-update`")
+
+
+@main.command()
+def self_update():
+    """
+    Update dfsync to the latest version published on pypi
+    """
+    latest_version = get_latest_version()
+    installed_version = get_installed_version()
+    if not is_older_version(installed_version, latest_version):
+        click.echo(f"The latest version is already installed: {installed_version}")
+        return
+    elif is_installed_in_editable_mode("dfsync"):
+        click.echo("dfsync is installed in editable mode, please update manually")
+        return
+    else:
+        update_package("dfsync")
 
 
 @main.command()
@@ -419,9 +450,9 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
                     no_errors = False
                     break
             with controller.getch_lock():
-                if checker.should_emit_upgrade_warning:
-                    checker.set_emitted_upgrade_warning()
-                    click.echo(checker.get_upgrade_warning())
+                if checker.should_emit_update_warning:
+                    checker.set_emitted_update_warning()
+                    click.echo(checker.get_update_warning())
             controller.raise_exceptions()
 
     except KeyboardInterrupt:

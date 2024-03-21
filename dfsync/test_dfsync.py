@@ -3,10 +3,6 @@ from tempfile import NamedTemporaryFile
 from dfsync.filters import EmacsBufferFilter, UntrackedGitFilesFilter
 
 
-def test_version():
-    assert False, "Test version not implemented"
-
-
 def test_emacs_buffer_filter():
     emacs = EmacsBufferFilter()
 

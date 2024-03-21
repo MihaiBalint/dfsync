@@ -23,6 +23,7 @@ ipython = "^8"
 ipdb = "^0.13"
 flake8 = "^4.0.1"
 pycodestyle = "^2.8.0"
+tqdm = "4.66.0"
 
 [tool.black]
 line-length = 120

@@ -103,5 +103,5 @@ def test_normalized_k8s_url():
     assert normalized_k8s_url("192.168.0.123:6443") == "https://192.168.0.123:6443"
     with pytest.raises(ValueError):
         normalized_k8s_url("")
-    with pytest.raises(ValueError):
-        normalized_k8s_url(None)
+
+    assert normalized_k8s_url(None) is None

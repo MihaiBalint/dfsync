@@ -1,5 +1,10 @@
+import click
 import json
+import subprocess
+import sys
 import urllib.request
+from typing import Optional
+
 from dfsync.lib import ControlledThreadedOperation
 
 
@@ -8,14 +13,14 @@ def get_package_version(package_name):
         from importlib.metadata import version
 
         return version(package_name)
-    except:
+    except Exception:
         pass
 
     try:
         import pkg_resources
 
         return pkg_resources.get_distribution(package_name).version
-    except:
+    except Exception:
         pass
 
     return None
@@ -41,7 +46,7 @@ def get_latest_version():
             raise ValueError("No version visible on github")
 
         return versions[0]
-    except Exception as e:
+    except Exception:
         return get_installed_version()
 
 
@@ -52,7 +57,7 @@ def parse_version(version_str):
     for part in version_str.split("."):
         try:
             parsed_version.append(int(part))
-        except:
+        except Exception:
             parsed_version.append(part)
     return parsed_version
 
@@ -80,15 +85,52 @@ class AsyncVersionChecker(ControlledThreadedOperation):
         self.installed = get_installed_version()
         self.latest = get_latest_version()
         self.installed_is_older = is_older_version(self.installed, self.latest)
+        self._is_install_editable = is_installed_in_editable_mode("dfsync")
         self._cta_count = 0
         self.stop()
 
     @property
-    def should_emit_upgrade_warning(self):
+    def should_emit_update_warning(self):
         return self.is_completed and self.installed_is_older and self._cta_count < 1
 
-    def set_emitted_upgrade_warning(self):
+    def set_emitted_update_warning(self):
         self._cta_count += 1
 
-    def get_upgrade_warning(self):
-        return f"dfsync ver. {self.latest} is available, please upgrade! ({self.installed} is installed)"
+    def get_update_warning(self):
+        if self._is_install_editable:
+            return f"dfsync ver. {self.latest} is available, please update! ({self.installed} is installed)"
+        else:
+            return f"dfsync ver. {self.latest} is available ({self.installed} is installed), please update using `dfsync self-update`"
+
+
+def _read_editable_location_from_pip_show_output(out: str) -> Optional[str]:
+    editable_label = "Editable project location: "
+    site_packages_label = "site-packages"
+    site_packages_lines = []
+
+    for line in out.split("\n"):
+        if line.startswith("Location: "):
+            continue
+        if line.startswith(editable_label):
+            return line[len(editable_label) :].strip()
+        if site_packages_label in line:
+            site_packages_lines.append(line)
+
+    return "UNKNOWN-EDITABLE-LOCATION" if len(site_packages_lines) > 0 else None
+
+
+def is_installed_in_editable_mode(package_name: str) -> bool:
+    try:
+        out = subprocess.check_output([sys.executable, "-m", "pip", "show", "-f", package_name]).decode()
+        editable_location = _read_editable_location_from_pip_show_output(out)
+        return editable_location is not None
+    except Exception:
+        return False
+
+
+def update_package(package_name: str):
+    click.echo(f"Running {sys.executable} -m pip install --upgrade {package_name}")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", package_name])
+    except Exception as e:
+        click.echo(f"Failed to update {package_name}: {e}")
