@@ -1,6 +1,7 @@
+import os
 import pytest
-import yaml
 import tempfile
+import yaml
 
 from dfsync.kube_credentials import update_local_kube_config, normalized_k8s_url
 
@@ -12,7 +13,7 @@ def mock_kube_credentials(mocker):
         return temp.name
 
 
-def test_update_missing_kube_config(mock_kube_credentials):
+def test_update_missing_kube_config_and_check_permissions(mock_kube_credentials):
     new_kube_credentials = {
         "clusters": [{"cluster": {"server": "test_server"}, "name": "test_cluster"}],
         "contexts": [{"context": {"cluster": "test_cluster", "user": "test_user"}, "name": "test_context"}],
@@ -22,6 +23,9 @@ def test_update_missing_kube_config(mock_kube_credentials):
     assert "test_cluster" in result
     assert "test_context" in result
     assert "test_user" in result
+
+    # Check file permissions
+    assert oct(os.stat(mock_kube_credentials).st_mode)[-3:] == "600"
 
 
 def test_update_empty_kube_config(mock_kube_credentials):
@@ -52,6 +56,15 @@ def test_update_empty_kube_config(mock_kube_credentials):
         assert credentials["users"][0]["name"] == "test_user"
         assert credentials["users"][0]["user"]["username"] == "test_username"
         assert credentials["users"][0]["user"]["password"] == "test_password"
+
+    # Verify that the old file was saved
+    with open(f"{mock_kube_credentials}.old", "r") as f:
+        credentials = yaml.safe_load(f)
+        assert credentials == empty_config
+
+    # Check file permissions for both old and new config file
+    assert oct(os.stat(mock_kube_credentials).st_mode)[-3:] == "600"
+    assert oct(os.stat(f"{mock_kube_credentials}.old").st_mode)[-3:] == "600"
 
 
 def test_update_existing_kube_config(mock_kube_credentials):

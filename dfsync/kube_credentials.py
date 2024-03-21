@@ -77,14 +77,16 @@ def update_local_kube_config(new_kube_credentials):
     credentials_yaml = yaml.dump(credentials)
     with open(f"{LOCAL_CREDENTIALS_FILE}.new", "w") as f:
         f.write(credentials_yaml)
+    os.chmod(f"{LOCAL_CREDENTIALS_FILE}.new", 0o600)
 
     if os.path.isfile(LOCAL_CREDENTIALS_FILE):
         if os.path.isfile(f"{LOCAL_CREDENTIALS_FILE}.old"):
             os.remove(f"{LOCAL_CREDENTIALS_FILE}.old")
         os.rename(f"{LOCAL_CREDENTIALS_FILE}", f"{LOCAL_CREDENTIALS_FILE}.old")
+        os.chmod(f"{LOCAL_CREDENTIALS_FILE}.old", 0o600)
 
     os.rename(f"{LOCAL_CREDENTIALS_FILE}.new", f"{LOCAL_CREDENTIALS_FILE}")
-
+    os.chmod(LOCAL_CREDENTIALS_FILE, 0o600)
     return credentials_yaml
 
 
