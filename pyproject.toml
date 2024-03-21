@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dfsync"
-version = "0.4.7"
+version = "0.4.8"
 description = ""
 authors = ["Mihai Balint <balint.mihai@gmail.com>"]
 
@@ -14,7 +14,7 @@ toml = "^0.10.2"
 tenacity = "^8.0.1"
 click-default-group = "^1.2.2"
 paramiko = {version = "^3.2.0", extras = ["invoke"]}
-black = "23.7.0"
+black = "24.3.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.4"
