@@ -12,6 +12,7 @@ from functools import partial
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+import dfsync.filters as filters
 from dfsync.backends import rsync_backend, kube_backend
 from dfsync.distribution import (
     get_installed_version,
@@ -21,7 +22,6 @@ from dfsync.distribution import (
     is_installed_in_editable_mode,
     update_package,
 )
-from dfsync.filters import add_user_ignored_patterns_filter, ALL_FILTERS
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
 from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config, normalized_k8s_url
@@ -54,7 +54,7 @@ class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandle
         **kwargs,
     ):
         super().__init__()
-        self.filters = [*ALL_FILTERS]
+        self.filters = [*filters.ALL_FILTERS]
 
         self.backend = backend
         self.backend_options = kwargs
@@ -313,12 +313,15 @@ def import_kube_host(kube_host=None, credentials=None):
 @main.command()
 @click.argument("source", nargs=-1)
 @click.argument("destination", default="", nargs=1)
-@click.option("--supervisor", is_flag=True, default=False, help="Try to install supervisor in container", type=bool)
+@click.option("--supervisor", is_flag=True, default=False, help="Try to install supervisor in container")
 @click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
 @click.option("--pod-timeout", default=30, help="Pod reconfiguration timeout (default is 30 seconds)", type=int)
 @click.option("--full-sync/--no-full-sync", default=True, help="On startup, sync all files to destination", type=bool)
-@click.option("--version", is_flag=True, default=False, help="Print the currently installed version", type=bool)
-def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, version):
+@click.option("--version", is_flag=True, default=False, help="Print the currently installed version")
+@click.option(
+    "--sync-git-untracked", is_flag=True, default=False, help="Sync git-untracked files instead of ignoring them"
+)
+def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, version, sync_git_untracked):
     """
     Watches a folder for changes and propagates all file changes to a destination.
 
@@ -358,7 +361,11 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
 
     paths = ["."] if len(source) == 0 else source
     config = read_config(destination, *paths)
-    add_user_ignored_patterns_filter(config.ignore_files)
+    filters.add_user_ignored_patterns_filter(config.ignore_files)
+
+    if sync_git_untracked:
+        filters.set_ignore_untracked_files(False)
+
     if version:
         _version()
         return

@@ -1,4 +1,5 @@
-import black, fnmatch
+import black
+import fnmatch
 import os.path
 import git.exc
 import subprocess
@@ -111,6 +112,10 @@ class UntrackedGitFilesFilter(LoggingFilter):
         self._repos = {}
         self._is_repo_initialized = {}
         self._untracked_and_ignored_files = {}
+        self._should_filter_untracked_files = True
+
+    def set_should_filter_untracked_files(self, should_filter_untracked_files: bool = True):
+        self._should_filter_untracked_files = should_filter_untracked_files
 
     def get_untracked_and_ignored_files(self):
         flat_files = []
@@ -175,12 +180,16 @@ class UntrackedGitFilesFilter(LoggingFilter):
             self._ignore(src_file_path, "GIT repo internals")
             return True
 
-        for rel_file_path in repo.untracked_files:
-            abs_file_path = os.path.join(repo.working_dir, rel_file_path)
-            if src_abs_path == abs_file_path:
-                self._ignore(src_file_path, "Untracked GIT file")
-                return True
+        if self._should_filter_untracked_files and self._is_untracked_file(repo, src_abs_path):
+            self._ignore(src_file_path, "Untracked GIT file")
+            return True
+
         return False
+
+    def _is_untracked_file(self, repo, src_abs_path):
+        return any(
+            src_abs_path == os.path.join(repo.working_dir, rel_file_path) for rel_file_path in repo.untracked_files
+        )
 
 
 USER_FILTERS = [EmacsBufferFilter(), PythonBlackFilter()]
@@ -215,3 +224,7 @@ def add_user_filter(f: LoggingFilter):
 
 def add_user_ignored_patterns_filter(patterns: [str]):
     add_user_filter(UserConfigFilter(patterns))
+
+
+def set_ignore_untracked_files(should_ignore_untracked_files: bool):
+    GIT_FILTER.set_should_filter_untracked_files(should_ignore_untracked_files)
