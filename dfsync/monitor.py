@@ -316,7 +316,7 @@ def import_kube_host(kube_host=None, credentials=None):
 @click.option("--supervisor", is_flag=True, default=False, help="Try to install supervisor in container", type=bool)
 @click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
 @click.option("--pod-timeout", default=30, help="Pod reconfiguration timeout (default is 30 seconds)", type=int)
-@click.option("--full-sync", is_flag=True, default=True, help="On startup, sync all files to destination", type=bool)
+@click.option("--full-sync/--no-full-sync", default=True, help="On startup, sync all files to destination", type=bool)
 @click.option("--version", is_flag=True, default=False, help="Print the currently installed version", type=bool)
 def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, version):
     """
