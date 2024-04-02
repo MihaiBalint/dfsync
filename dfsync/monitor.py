@@ -263,6 +263,10 @@ def version():
     """
     Print the currently installed version
     """
+    _version()
+
+
+def _version():
     installed_version = get_installed_version()
     click.echo(f"{installed_version}")
 
@@ -309,11 +313,12 @@ def import_kube_host(kube_host=None, credentials=None):
 @main.command()
 @click.argument("source", nargs=-1)
 @click.argument("destination", default="", nargs=1)
-@click.option("--supervisor/--no-supervisor", default=False, help="Try to install supervisor in container", type=bool)
+@click.option("--supervisor", is_flag=True, default=False, help="Try to install supervisor in container", type=bool)
 @click.option("--kube-host", default=None, help="Kubernetes api host server address/hostname", type=str)
 @click.option("--pod-timeout", default=30, help="Pod reconfiguration timeout (default is 30 seconds)", type=int)
-@click.option("--full-sync/--no-full-sync", default=True, help="On startup, sync all files to destination", type=bool)
-def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
+@click.option("--full-sync", is_flag=True, default=True, help="On startup, sync all files to destination", type=bool)
+@click.option("--version", is_flag=True, default=False, help="Print the currently installed version", type=bool)
+def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, version):
     """
     Watches a folder for changes and propagates all file changes to a destination.
 
@@ -354,6 +359,9 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync):
     paths = ["."] if len(source) == 0 else source
     config = read_config(destination, *paths)
     add_user_ignored_patterns_filter(config.ignore_files)
+    if version:
+        _version()
+        return
 
     destination_dir = destination
     if len(source) == 0 and config.destination and not has_destination_optics(destination):
