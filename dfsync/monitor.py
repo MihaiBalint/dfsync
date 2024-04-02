@@ -258,7 +258,7 @@ def main():
     pass
 
 
-@main.command()
+@main.command(add_help_option=False)
 def version():
     """
     Print the currently installed version
@@ -279,17 +279,16 @@ def _version():
         click.echo(f"Latest version is {latest_version}, please update using `dfsync self-update`")
 
 
-@main.command(name="help", context_settings=dict(ignore_unknown_options=True))
-@click.option("--help", is_flag=True, default=False, hidden=True)
-def help(help):
+@main.command(name="help", add_help_option=False)
+def help():
     """
     Print the usage/help for dfsync
     """
-    with click.Context(sync, info_name="dfsync") as ctx:
+    with click.Context(sync, info_name="dfsync", max_content_width=999) as ctx:
         click.echo(sync.get_help(ctx))
 
 
-@main.command()
+@main.command(add_help_option=False)
 def self_update():
     """
     Update dfsync to the latest version published on pypi
