@@ -13,6 +13,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 import dfsync.filters as filters
+import dfsync.lib as lib
 from dfsync.backends import rsync_backend, kube_backend
 from dfsync.distribution import (
     get_installed_version,
@@ -25,7 +26,6 @@ from dfsync.distribution import (
 from dfsync.config import read_config
 from dfsync.char_ui import KeyController
 from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config, normalized_k8s_url
-from dfsync.lib import ControlledThreadedOperation, thread_manager
 
 logging.basicConfig(level=logging.WARN)
 
@@ -44,7 +44,11 @@ class RelatedLocationsError(ValueError):
     pass
 
 
-class FileChangedEventHandler(ControlledThreadedOperation, FileSystemEventHandler):
+class UnsupportedRsyncError(ValueError):
+    pass
+
+
+class FileChangedEventHandler(lib.ControlledThreadedOperation, FileSystemEventHandler):
     def __init__(
         self,
         backend: str = "log",
@@ -394,6 +398,11 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
         elif len(missing) > 0:
             click.echo(f"Using source file/dirs {', '.join(paths)}")
 
+        installed_rsync = lib.check_rsync()
+        click.echo(f"Installed: {installed_rsync.executable}")
+        if installed_rsync != lib.RsyncFlavour.SAMBA_RSYNC:
+            raise UnsupportedRsyncError()
+
         backend_options = dict(
             destination_dir=destination_dir,
             supervisor=supervisor,
@@ -420,6 +429,14 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
             )
         )
         click.echo(str(e))
+        return -1
+
+    except UnsupportedRsyncError:
+        click.echo(
+            "\nStarting from Mac OSX Sequoia 15.4, Apple are shipping openrsync instead of the GPL-licensed rsync from Samba"
+            "\nThe Apple version of rsync has less features and is currently not supported by dfsync"
+            "\nPlease use homebrew to install the GPL-licensed rsync from Samba with this command `brew install rsync`."
+        )
         return -1
 
     except ValueError as e:
@@ -454,7 +471,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
     controller.on_key(
         "x",
         description="to exit",
-        action=partial(thread_manager.stop, "Exiting."),
+        action=partial(lib.thread_manager.stop, "Exiting."),
     )
 
     try:
@@ -480,16 +497,16 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
             controller.raise_exceptions()
 
     except KeyboardInterrupt:
-        thread_manager.stop()
+        lib.thread_manager.stop()
         click.echo("Received [Ctrl-C], exiting.")
 
     except:
-        thread_manager.stop()
+        lib.thread_manager.stop()
         raise
 
     finally:
         observer.stop()
-        thread_manager.stop()
+        lib.thread_manager.stop()
         backend_engine.on_monitor_exit(**backend_options)
         if observer.ident is not None:
             # only join the observer if it was previously started
