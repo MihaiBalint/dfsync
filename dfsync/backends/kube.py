@@ -569,7 +569,7 @@ class KubeReDeployer:
         try:
             resp = self._exec(pod, spec, status, Generic.check_can_exec())
             return
-        except:
+        except Exception:
             self._uncrash(pod, spec, status)
 
     def _sniff_image_distro(self, pod, spec, status):
@@ -596,7 +596,7 @@ class KubeReDeployer:
                     return False
 
             return len(resp) > 0
-        except:
+        except Exception:
             return False
 
     def stabilize_deployments(self, image_base):

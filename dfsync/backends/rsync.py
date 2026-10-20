@@ -10,6 +10,8 @@ EVENT_TYPE_MAP = {
     "full-sync": "Full Sync",
 }
 
+RSYNC_CONFIG = {"RSYNC_EXECUTABLE": "rsync"}
+
 
 class StopStreamReader(Exception):
     pass
@@ -174,7 +176,7 @@ class FileRsync:
             rsync_cmd = self._get_rsync_cmd_on_full_sync(src_paths, destination_dir, blocking_io, rsh)
         else:
             rsync_cmd = [
-                "rsync",
+                get_rsync_executable(),
                 "-Rvx",
                 "--temp-dir=/tmp",
                 "--delay-updates",
@@ -227,7 +229,7 @@ class FileRsync:
                 if return_code != 23:
                     raise subprocess.CalledProcessError(returncode=return_code, cmd=rsync_cmd)
 
-        except:
+        except Exception:
             echo("Sync failed")
             env_str = "N/A"
             if rsh_env:
@@ -260,7 +262,7 @@ class FileRsync:
             src_dir = "{}/".format(src_dir)
 
         cmd = [
-            "rsync",
+            get_rsync_executable(),
             "-rvx",
             "--delete",
             "--filter=-,s *",
@@ -276,7 +278,7 @@ class FileRsync:
     def _get_rsync_cmd_on_full_sync(self, src_file_paths: list, destination_dir: str, blocking_io: list, rsh: list):
         filters = ["--filter=- {}".format(f) for f in list_files_to_ignore()]
         return [
-            "rsync",
+            get_rsync_executable(),
             "-rvx",
             "--temp-dir=/tmp",
             "--delay-updates",
@@ -312,3 +314,11 @@ def sanitize_relative_path(path):
 
 
 rsync_backend = FileRsync
+
+
+def get_rsync_executable() -> str:
+    return RSYNC_CONFIG["RSYNC_EXECUTABLE"]
+
+
+def set_rsync_executable(executable_path: str) -> str:
+    return RSYNC_CONFIG["RSYNC_EXECUTABLE"]

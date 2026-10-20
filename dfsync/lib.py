@@ -1,8 +1,10 @@
+import base64
 from enum import Enum
 import platform
 import subprocess
 import time
 import threading
+import zlib
 
 
 class ThreadedOperationsManager:
@@ -99,3 +101,20 @@ def check_rsync() -> RsyncFlavour:
     except (subprocess.SubprocessError, FileNotFoundError):
         # If rsync isn't available or fails, default to Samba rsync
         return RsyncFlavour.SAMBA_RSYNC
+
+
+NONCE = "Rah4liteaR1geughuC8eushaOhtiW0xu"
+
+
+def dsn_pack(unpacked_dsn: str) -> str:
+    # XOR with NONCE, compress and base64 encode
+    xored = "".join(chr(ord(a) ^ ord(b)) for a, b in zip(unpacked_dsn, NONCE * (len(unpacked_dsn) // len(NONCE) + 1)))
+    compressed = zlib.compress(xored.encode())
+    return base64.b64encode(compressed).decode()
+
+
+def dsn_unpack(packed_dsn: str) -> str:
+    # Reverse the packing process
+    decoded = base64.b64decode(packed_dsn)
+    decompressed = zlib.decompress(decoded).decode()
+    return "".join(chr(ord(a) ^ ord(b)) for a, b in zip(decompressed, NONCE * (len(decompressed) // len(NONCE) + 1)))

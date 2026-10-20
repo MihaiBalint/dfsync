@@ -1,31 +1,37 @@
-import click
+import logging
 import os
 import os.path
+import queue
 import sys
 import time
-import logging
-import queue
-
-from click_default_group import DefaultGroup
 from contextlib import contextmanager
 from functools import partial
-from watchdog.observers import Observer
+
+import click
+import sentry_sdk
+from click_default_group import DefaultGroup
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 import dfsync.filters as filters
 import dfsync.lib as lib
-from dfsync.backends import rsync_backend, kube_backend
+from dfsync.backends import kube_backend, rsync_backend
+from dfsync.backends.rsync import set_rsync_executable
+from dfsync.char_ui import KeyController
+from dfsync.config import read_config
 from dfsync.distribution import (
+    AsyncVersionChecker,
     get_installed_version,
     get_latest_version,
-    is_older_version,
-    AsyncVersionChecker,
     is_installed_in_editable_mode,
+    is_older_version,
     update_package,
 )
-from dfsync.config import read_config
-from dfsync.char_ui import KeyController
-from dfsync.kube_credentials import contextualize_kube_credentials, update_local_kube_config, normalized_k8s_url
+from dfsync.kube_credentials import (
+    contextualize_kube_credentials,
+    normalized_k8s_url,
+    update_local_kube_config,
+)
 
 logging.basicConfig(level=logging.WARN)
 
@@ -34,6 +40,7 @@ BACKENDS = {
     "file-rsync": rsync_backend,
     "kube-rsync": kube_backend,
 }
+SENTRY_DSN = "eJyzEpVxkQ+O9gpKYAoIdwyKFinjYnZ04gnSjXXhTg/xFEwOiA+Li/ENULSP4+Rh5JCS0Y33lpThZlDmZ2MwlhOUqg0CAPv5DeE="
 
 
 class IgnoreEvent(Exception):
@@ -267,6 +274,7 @@ def version():
     """
     Print the currently installed version
     """
+    sentry_sdk.set_tag("command", "version")
     _version()
 
 
@@ -297,6 +305,7 @@ def self_update():
     """
     Update dfsync to the latest version published on pypi
     """
+    sentry_sdk.set_tag("command", "self_update")
     latest_version = get_latest_version()
     installed_version = get_installed_version()
     if not is_older_version(installed_version, latest_version):
@@ -319,6 +328,7 @@ def import_kube_host(kube_host=None, credentials=None):
 
     ssh user@kube-host -C "sudo cat /root/.kube/config" | dfsync import-kube-host --kube-host=https://kube-host:6443
     """
+    sentry_sdk.set_tag("command", "import_kube_host")
     patch = contextualize_kube_credentials(normalized_k8s_url(kube_host), credentials)
     update_local_kube_config(patch)
 
@@ -366,6 +376,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
     * editor-aware: changes to temporary files created by source code editors will be ignored
     * transparent: every action is diligently logged in the console
     """
+    sentry_sdk.set_tag("command", "sync")
     logging.basicConfig(
         level=logging.WARN,
         format="%(asctime)s - %(message)s",
@@ -392,17 +403,22 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
         click.echo(f"Source file/dirs not found: {', '.join(missing)}")
 
     backend, destination_dir = split_destination(destination_dir)
+    sentry_sdk.set_tag("sync-backend", backend)
     try:
         if len(paths) == 0:
             raise ValueError("No source file/dirs found")
         elif len(missing) > 0:
             click.echo(f"Using source file/dirs {', '.join(paths)}")
 
-        installed_rsync = lib.check_rsync()
-        click.echo(f"Installed: {installed_rsync.executable}")
-        if installed_rsync != lib.RsyncFlavour.SAMBA_RSYNC:
-            raise UnsupportedRsyncError()
+        if backend == "kube-rsync":
+            installed_rsync = lib.check_rsync()
+            if installed_rsync != lib.RsyncFlavour.SAMBA_RSYNC and lib.RsyncFlavour.SAMBA_RSYNC.exists_installed:
+                set_rsync_executable(lib.RsyncFlavour.SAMBA_RSYNC.executable)
+            elif installed_rsync != lib.RsyncFlavour.SAMBA_RSYNC:
+                click.echo(f"Found rsync: {installed_rsync.executable}")
+                raise UnsupportedRsyncError()
 
+        sentry_sdk.set_tag("sync-backend", backend)
         backend_options = dict(
             destination_dir=destination_dir,
             supervisor=supervisor,
@@ -448,6 +464,7 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
             )
         )
         click.echo(str(e))
+        sentry_sdk.capture_exception(e)
         return -1
 
     checker = AsyncVersionChecker()
@@ -514,4 +531,8 @@ def sync(source, destination, supervisor, kube_host, pod_timeout, full_sync, ver
 
 
 if __name__ == "__main__":
+    sentry_sdk.init(
+        lib.dsn_unpack(SENTRY_DSN),
+        release=f"dfsync@{get_installed_version()}",
+    )
     sys.exit(main() or 0)
