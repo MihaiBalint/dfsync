@@ -14,7 +14,6 @@ toml = "^0.10.2"
 tenacity = "^8.0.1"
 click-default-group = "^1.2.2"
 paramiko = {version = "^3.2.0", extras = ["invoke"]}
-black = "24.3.0"
 sentry-sdk = "^2.26.0"
 
 [tool.poetry.dev-dependencies]

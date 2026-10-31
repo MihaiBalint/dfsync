@@ -1,4 +1,3 @@
-import black
 import fnmatch
 import os.path
 import git.exc
@@ -75,7 +74,9 @@ class EmacsBufferFilter(UserConfigFilter):
         self._ignore_message = "Emacs buffer backup"
 
 
-class PythonBlackFilter(LoggingFilter):
+class PythonSyntaxFilter(LoggingFilter):
+    """Reject .py files that do not parse, so a half-saved file never reaches the pod."""
+
     def __init__(self):
         super().__init__()
 
@@ -87,23 +88,27 @@ class PythonBlackFilter(LoggingFilter):
         parent_path, file_name = os.path.split(os.path.expanduser(src_file_path))
         for pattern in PYTHON_PATTERNS:
             if fnmatch.fnmatch(file_name, pattern):
-                return self._black_check(src_file_path)
+                return self._syntax_check(src_file_path)
         return False
 
-    def _black_check(self, src_file_path):
+    def _syntax_check(self, src_file_path):
         try:
-            with open(src_file_path, "r") as f:
+            with open(src_file_path, "rb") as f:
                 contents = f.read()
-                black.format_file_contents(contents, fast=False, mode=black.FileMode())
+            compile(contents, src_file_path, "exec", dont_inherit=True)
             return False
 
-        except (FileNotFoundError, PermissionError, black.report.NothingChanged) as e:
+        except (FileNotFoundError, PermissionError):
             return False
 
         except Exception as e:
             message = str(e) or type(e).__name__
             echo(f"Rejected {src_file_path}, {message}")
             return True
+
+
+# Kept for code that imported the old name
+PythonBlackFilter = PythonSyntaxFilter
 
 
 class UntrackedGitFilesFilter(LoggingFilter):
@@ -192,7 +197,7 @@ class UntrackedGitFilesFilter(LoggingFilter):
         )
 
 
-USER_FILTERS = [EmacsBufferFilter(), PythonBlackFilter()]
+USER_FILTERS = [EmacsBufferFilter(), PythonSyntaxFilter()]
 GIT_FILTER = UntrackedGitFilesFilter()
 ALL_FILTERS = [
     exclude_watchdog_directory_events,
